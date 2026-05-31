@@ -1,0 +1,120 @@
+version: "3.8"
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: harborsync-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-vessel:
+    image: postgres:15
+    container_name: vessel-db
+    environment:
+      POSTGRES_DB: ${VESSEL_DB:-vessel_db}
+      POSTGRES_USER: ${POSTGRES_USER:-harbor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-harbor123}
+    ports:
+      - "5433:5432"
+
+  postgres-task:
+    image: postgres:15
+    container_name: task-db
+    environment:
+      POSTGRES_DB: ${TASK_DB:-task_db}
+      POSTGRES_USER: ${POSTGRES_USER:-harbor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-harbor123}
+    ports:
+      - "5434:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: harborsync-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save "" --appendonly no
+
+  vessel-service:
+    build: ./vessel-service
+    container_name: vessel-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres-vessel:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://vessel-db:5432/${VESSEL_DB:-vessel_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-harbor}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-harbor123}
+      SPRING_RABBITMQ_HOST: rabbitmq
+
+  telemetry-service:
+    build: ./telemetry-service
+    container_name: telemetry-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      - redis
+      - rabbitmq
+    environment:
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_RABBITMQ_HOST: rabbitmq
+
+  congestion-analysis:
+    build: ./congestion-analysis
+    container_name: congestion-analysis
+    ports:
+      - "8083:8083"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+
+  task-assignment-service:
+    build: ./task-assignment-service
+    container_name: task-assignment-service
+    ports:
+      - "8084:8084"
+    depends_on:
+      - postgres-task
+      - rabbitmq
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://task-db:5432/${TASK_DB:-task_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-harbor}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-harbor123}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      VESSEL_SERVICE_URL: http://vessel-service:8081
+
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    ports:
+      - "8085:8085"
+    depends_on:
+      - rabbitmq
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+
+  gateway:
+    build: ./gateway
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - vessel-service
+      - task-assignment-service
+    environment:
+      VESSEL_SERVICE_URL: http://vessel-service:8081
+      TASK_SERVICE_URL: http://task-assignment-service:8084

@@ -50,6 +50,10 @@ Test kapsamı genisletildi. Python tarafinda Notification Service icin payload d
 
 Java tarafinda Telemetry Controller icin correlation header ve validation testleri, Task Assignment producer routing testi eklendi. Mevcut Task Assignment service/controller testleriyle birlikte bu testler Maven ortaminda calistirilacak. Bu makinede `mvn` olmadigi icin Java testleri lokal calistirilamadi; ancak POM XML parse kontrolu basariyla gecti.
 
+## 2026-05-31 21:27:49 +03
+
+Acik kalan ortak issue'lar (#1, #2, #12, #13) tekrar degerlendirildi. #1 ve #2 icin altyapi, Docker Compose, `.env.example`, queue/event sozlesmeleri ve DLQ ayarlari zaten tamamlanmisti. #12 ve #13 icin README'ye calistirilabilir demo curl akisi, test komutlari, ekip gorev dagilimi, hafta bazli plan ve bilinen riskler eklendi. Boylece ortak issue'lar kapatilabilir hale getirildi.
+
 ## 2026-05-31 21:08:49 +03
 
 Python test calismasina baslandi. Neden: Deniz'e ait Notification Service ve Drone Simulator parcalarinin demo oncesi hizli dogrulanabilir olmasi gerekiyor; testlerin amaci tam entegrasyon yerine kritik davranislari kucuk fake/mock nesnelerle kontrol etmek. Nasil: `unittest` secildi, cunku ek test bagimliligi eklemiyor ve mevcut `requirements.txt` dosyasini sisirmiyor. Notification tarafinda gercek RabbitMQ olmadan fake `IncomingMessage` ve async context manager kullaniliyor; `aio-pika` yerelde kurulu degilse import kirilmasin diye test icinde minimal stub tanimlaniyor. Drone simulator tarafinda telemetry payload sozlesmesi, `send_telemetry` HTTP cagrisi ve servis kapaliyken `MAX_ITERATIONS=1` ana akisinin exception firlatmadan bitmesi test ediliyor.

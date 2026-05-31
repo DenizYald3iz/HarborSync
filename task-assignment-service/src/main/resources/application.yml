@@ -1,0 +1,58 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: task-assignment-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5434/task_db}
+    username: ${SPRING_DATASOURCE_USERNAME:harbor}
+    password: ${SPRING_DATASOURCE_PASSWORD:harbor123}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        default-requeue-rejected: false
+
+harborsync:
+  rabbitmq:
+    exchange: harborsync.exchange
+    queues:
+      congestion-alert: congestion.alert
+      task-created: task.created
+      dlq: dlq.errors
+
+vessel:
+  service:
+    url: ${VESSEL_SERVICE_URL:http://vessel-service:8081}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      vessel-service:
+        register-health-indicator: true
+        sliding-window-size: 5
+        minimum-number-of-calls: 3
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+

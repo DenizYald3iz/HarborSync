@@ -32,3 +32,29 @@ Default credentials are `guest` / `guest`.
 5. Notification Service consumes business events and writes structured logs.
 
 See [event contracts](docs/event-contracts.md) for queue payloads.
+
+## Notification Service
+
+The FastAPI notification service listens to `congestion.alert`, `task.created`, and
+`dlq.errors` over RabbitMQ. It writes rotating structured logs to
+`notification-service/logs/alerts.log` with timestamp, level, correlation ID, and
+message fields.
+
+```bash
+cd notification-service
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8085
+```
+
+Health check: http://localhost:8085/health
+
+## Drone Simulator
+
+The simulator posts raw telemetry payloads to the Telemetry Service and continues
+looping if the endpoint is temporarily unavailable.
+
+```bash
+cd drone-simulator
+pip install requests
+TELEMETRY_URL=http://localhost:8082/telemetry/ingest SIM_INTERVAL_SECONDS=2 python simulate.py
+```

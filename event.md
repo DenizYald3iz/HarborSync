@@ -79,3 +79,17 @@ Test dogrulamasi yapildi. `python3 -m unittest discover -s notification-service/
 ## 2026-05-31 21:10:11 +03
 
 Python testleri calistirildi ve gecti. Neden: Test dosyalarinin sadece yazilmis olmasi yeterli degil; yerel ortamda bagimlilik yuklemeden calisabildigini de kanitlamak gerekiyor. Nasil: `python3 -m unittest discover -s notification-service/tests -v` komutu 4 testi basariyla gecirdi; JSON decode, gecersiz payload reddi, congestion alert log davranisi ve DLQ metadata loglamasi kontrol edildi. `python3 -m unittest discover -s drone-simulator/tests -v` komutu 3 testi basariyla gecirdi; telemetry alanlari, servis kapaliyken tek iterasyonluk ana akis ve HTTP status code donduren `send_telemetry` davranisi kontrol edildi.
+
+## 2026-05-31 22:06:29 +03
+
+Calistirilabilir ortam dosyalari tamamlandi. Neden: Projenin sadece kaynak kod olarak degil, juri veya demo makinesinde tek komutla ayaga kalkabilmesi gerekiyor. Nasil: `.env.example` tum servislerin ortak Redis, RabbitMQ, PostgreSQL ve event queue ayarlarini kapsayacak sekilde genisletildi; lokal calistirma icin `.env` bu ornekten uretildi. Drone Simulator icin `requirements.txt` eklendi, Docker build context'lerini temiz tutmak icin `.dockerignore` olusturuldu.
+
+Docker Compose dosyasi servis bagimliliklari ve environment degiskenleri acisindan hizalandi. Spring servisleri RabbitMQ user/password degerlerini compose ortamindan aliyor; Notification Service ayni exchange ve queue isimlerini kullaniyor; Gateway Redis host/port bilgisini container network icindeki `redis` servisine gore aliyor. Compose `version` alani yeni Docker Compose tarafindan obsolete uyarisi verdigi icin kaldirildi.
+
+README calistirma dokumani bastan sona tamamlandi. Icerige on kosullar, `.env` hazirlama, `docker compose up --build`, saglik kontrol endpointleri, demo akisi, servisleri tek tek lokal calistirma komutlari, test komutlari ve build notlari eklendi. Go tabanli Telemetry Service icin `go.sum` uretildi ve Dockerfile artik `go.mod`/`go.sum` ile deterministik dependency indirme yapacak sekilde duzenlendi.
+
+Ilk compose dogrulamasinda Task Assignment Service acilirken `vesselServiceClient` bean adi cakismasi bulundu. Neden: WebClient bean metodu ile `VesselServiceClient` component'i Spring icinde ayni bean adina denk geliyordu. Nasil: WebClient bean adi `vesselWebClient` yapildi ve client constructor'i `@Qualifier("vesselWebClient")` ile bu bean'e baglandi. Bu, uygulamanin bean override ayari acilmadan temiz sekilde baslamasini saglar.
+
+## 2026-05-31 22:11:17 +03
+
+Ortam dogrulamasi tamamlandi. `docker compose config --quiet` hatasiz calisti. `python3 -m unittest discover -s notification-service/tests -v` 4 testi, `python3 -m unittest discover -s drone-simulator/tests -v` 3 testi basariyla gecirdi. `docker compose build` tum servisler icin basarili oldu; Telemetry Service build asamasinda Go testleri de `ok harborsync/telemetry-service` olarak gecti. `docker compose up -d` sonrasi RabbitMQ, Redis, PostgreSQL containerlari ve tum uygulama servisleri `Up` durumda goruldu. Container icinden Telemetry Service `/health` endpointi `status=UP`, Notification Service `/health` endpointi `rabbitmqConnected=true` dondu.

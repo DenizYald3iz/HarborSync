@@ -15,8 +15,43 @@ Distributed Port Cargo Coordination Platform for CENG-442 Microservice Architect
 
 ## Local Stack
 
-Copy `.env.example` to `.env` if you want to override defaults. The local
-defaults are intentionally simple for the course demo.
+### Prerequisites
+
+For the normal Docker workflow you only need:
+
+- Docker Engine
+- Docker Compose plugin (`docker compose`)
+
+For running services/tests without Docker:
+
+- Java 17 + Maven 3.9.x for Spring Boot services
+- Go 1.22 for Telemetry Service
+- Python 3.11 for Notification Service and Drone Simulator
+
+### Environment
+
+Create a local `.env` file from the example:
+
+```bash
+cp .env.example .env
+```
+
+The default values are demo-friendly and match `docker-compose.yml`.
+
+Important local defaults:
+
+| Variable | Default | Used by |
+|---|---|---|
+| `RABBITMQ_DEFAULT_USER` | `guest` | RabbitMQ |
+| `RABBITMQ_DEFAULT_PASS` | `guest` | RabbitMQ |
+| `POSTGRES_USER` | `harbor` | PostgreSQL |
+| `POSTGRES_PASSWORD` | `harbor123` | PostgreSQL |
+| `VESSEL_DB` | `vessel_db` | Vessel DB |
+| `TASK_DB` | `task_db` | Task DB |
+| `REDIS_ADDR` | `redis:6379` | Telemetry Service |
+| `RABBITMQ_URL` | `amqp://guest:guest@rabbitmq:5672/` | Go/Python services |
+
+### Run Everything
 
 ```bash
 docker compose up --build
@@ -25,6 +60,28 @@ docker compose up --build
 RabbitMQ Management UI: http://localhost:15672
 
 Default credentials are `guest` / `guest`.
+
+Health endpoints:
+
+- API Gateway: http://localhost:8080/actuator/health
+- Vessel Service: http://localhost:8081/actuator/health
+- Telemetry Service: http://localhost:8082/health
+- Congestion Analysis: http://localhost:8083/actuator/health
+- Task Assignment: http://localhost:8084/actuator/health
+- Notification Service: http://localhost:8085/health
+
+Useful Docker commands:
+
+```bash
+docker compose ps
+docker compose logs -f telemetry-service
+docker compose logs -f notification-service
+docker compose down
+docker compose down -v
+```
+
+Use `docker compose down -v` when you want to reset PostgreSQL/RabbitMQ/Redis
+state completely.
 
 ## Workflow
 
@@ -92,6 +149,64 @@ Expected result: Congestion Analysis publishes `congestion.alert`, Task
 Assignment creates a pending task and publishes `task.created`, and Notification
 Service logs both business events with the same correlation ID.
 
+## Run Individual Services Locally
+
+Infrastructure only:
+
+```bash
+docker compose up rabbitmq postgres-vessel postgres-task redis
+```
+
+Vessel Service:
+
+```bash
+mvn -f vessel-service/pom.xml spring-boot:run
+```
+
+Telemetry Service:
+
+```bash
+cd telemetry-service
+REDIS_ADDR=localhost:6379 \
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/ \
+go run .
+```
+
+Congestion Analysis:
+
+```bash
+mvn -f congestion-analysis/pom.xml spring-boot:run
+```
+
+Task Assignment:
+
+```bash
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5434/task_db \
+VESSEL_SERVICE_URL=http://localhost:8081 \
+mvn -f task-assignment-service/pom.xml spring-boot:run
+```
+
+Notification Service:
+
+```bash
+cd notification-service
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/ \
+uvicorn main:app --host 0.0.0.0 --port 8085
+```
+
+Drone Simulator:
+
+```bash
+cd drone-simulator
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+TELEMETRY_URL=http://localhost:8082/telemetry/ingest python simulate.py
+```
+
 ## Tests
 
 Python tests can run in this environment without extra infrastructure:
@@ -121,6 +236,19 @@ Static checks used during setup:
 ```bash
 docker compose config --quiet
 ```
+
+## Build Notes
+
+The Docker workflow builds all services from source:
+
+- Spring services use Maven container images.
+- Telemetry Service uses the official Go image and runs `go test ./...` during
+  image build.
+- Notification Service uses `notification-service/requirements.txt`.
+- Drone Simulator is a local helper script and is not part of `docker compose`.
+
+If dependency downloads fail during Docker build, check network access to Maven
+Central, the Go module proxy, and PyPI.
 
 ## Team Responsibilities
 

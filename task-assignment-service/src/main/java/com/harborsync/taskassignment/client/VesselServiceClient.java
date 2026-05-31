@@ -5,6 +5,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -15,7 +16,7 @@ public class VesselServiceClient {
 
     private final WebClient vesselServiceClient;
 
-    public VesselServiceClient(WebClient vesselServiceClient) {
+    public VesselServiceClient(@Qualifier("vesselWebClient") WebClient vesselServiceClient) {
         this.vesselServiceClient = vesselServiceClient;
     }
 
@@ -35,4 +36,3 @@ public class VesselServiceClient {
         return List.of();
     }
 }
-

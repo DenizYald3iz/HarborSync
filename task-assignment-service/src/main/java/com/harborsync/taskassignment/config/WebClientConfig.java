@@ -9,11 +9,10 @@ import org.springframework.web.reactive.function.client.WebClient;
 public class WebClientConfig {
 
     @Bean
-    public WebClient vesselServiceClient(
+    public WebClient vesselWebClient(
             @Value("${vessel.service.url:http://vessel-service:8081}") String baseUrl) {
         return WebClient.builder()
                 .baseUrl(baseUrl)
                 .build();
     }
 }
-

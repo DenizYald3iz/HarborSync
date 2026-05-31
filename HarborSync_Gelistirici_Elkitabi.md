@@ -84,7 +84,7 @@ PostgreSQL   Redis      stateless       PostgreSQL
 
 | Servis | Teknoloji | Veritabanı | İletişim Tipi |
 |---|---|---|---|
-| **Telemetry Service** | Spring Boot 3 | Redis 7 | RabbitMQ producer |
+| **Telemetry Service** | Go 1.22 | Redis 7 | RabbitMQ producer |
 | **Task Assignment Service** | Spring Boot 3 | PostgreSQL 15 | RabbitMQ consumer + REST |
 | **Notification Service** | FastAPI (Python 3.11) | Yok (log dosyası) | RabbitMQ consumer |
 
@@ -1016,16 +1016,17 @@ public class RequestLoggingFilter implements GlobalFilter, Ordered {
 
 Drone simülatöründen ham telemetri alır, doğrular, son drone state'ini Redis'e yazar ve işlenmiş event'i `telemetry.processed` kuyruğuna basar.
 
-> **Not:** Orijinal dökümanda Go veya Node.js geçmekte, ancak mimari diyagramda Spring Boot yazılmaktadır. Tutarlılık için **Spring Boot 3** kullanılacaktır. Drone simülatörü ise ayrı, basit bir Python script olacaktır.
+> **Uygulama güncellemesi:** Bu repo implementasyonunda Telemetry Service **Go 1.22** ile yazılmıştır. Orijinal raporlarda yer alan Spring Boot örnekleri tarihsel tasarım referansı olarak kalmıştır; güncel kaynak kodu `telemetry-service/main.go`, `go.mod` ve Go testleridir. Drone simülatörü ayrı, basit bir Python script olarak korunmuştur.
 
 ### 7.2 Teknoloji Yığını
 
 | Katman | Teknoloji | Versiyon |
 |---|---|---|
-| Framework | Spring Boot 3 | 3.2.x |
-| Cache | Spring Data Redis | — |
-| Redis Client | Lettuce (default) | — |
-| Mesajlaşma | Spring AMQP | — |
+| Runtime | Go | 1.22 |
+| HTTP | `net/http` | stdlib |
+| Cache | Redis | 7 |
+| Redis Client | `github.com/redis/go-redis/v9` | 9.x |
+| Mesajlaşma | `github.com/rabbitmq/amqp091-go` | 1.x |
 | Port | 8082 | — |
 
 ### 7.3 Maven Bağımlılıkları

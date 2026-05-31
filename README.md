@@ -8,7 +8,7 @@ Distributed Port Cargo Coordination Platform for CENG-442 Microservice Architect
 |---|---|---|---|
 | API Gateway | Emirhan | Spring Cloud Gateway | 8080 |
 | Vessel Service | Emirhan | Spring Boot 3 + PostgreSQL | 8081 |
-| Telemetry Service | Deniz | Spring Boot 3 + Redis + RabbitMQ | 8082 |
+| Telemetry Service | Deniz | Go 1.22 + Redis + RabbitMQ | 8082 |
 | Congestion Analysis | Emirhan | Spring Boot 3 + RabbitMQ | 8083 |
 | Task Assignment | Deniz | Spring Boot 3 + PostgreSQL + RabbitMQ | 8084 |
 | Notification Service | Deniz | FastAPI + RabbitMQ | 8085 |
@@ -101,11 +101,16 @@ python3 -m unittest discover -s notification-service/tests -v
 python3 -m unittest discover -s drone-simulator/tests -v
 ```
 
+Go tests require Go 1.22:
+
+```bash
+cd telemetry-service && go test ./...
+```
+
 Java tests require Maven and Java 17:
 
 ```bash
 mvn -f vessel-service/pom.xml test
-mvn -f telemetry-service/pom.xml test
 mvn -f congestion-analysis/pom.xml test
 mvn -f task-assignment-service/pom.xml test
 mvn -f gateway/pom.xml test

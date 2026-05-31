@@ -65,11 +65,18 @@ services:
     ports:
       - "8082:8082"
     depends_on:
-      - redis
-      - rabbitmq
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     environment:
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_RABBITMQ_HOST: rabbitmq
+      PORT: 8082
+      REDIS_ADDR: redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_EXCHANGE: harborsync.exchange
+      TELEMETRY_PROCESSED_QUEUE: telemetry.processed
+      DLQ_QUEUE: dlq.errors
+      DRONE_STATE_TTL_SECONDS: 30
 
   congestion-analysis:
     build: ./congestion-analysis

@@ -1,12 +1,12 @@
-FROM maven:3.9.6-eclipse-temurin-17 AS build
-WORKDIR /workspace
-COPY pom.xml .
-RUN mvn -q -DskipTests dependency:go-offline
-COPY src ./src
-RUN mvn -q -DskipTests package
+FROM golang:1.22-alpine AS build
+WORKDIR /src
+COPY go.mod ./
+RUN go mod download
+COPY . .
+RUN go test ./... && go build -o /out/telemetry-service .
 
-FROM eclipse-temurin:17-jre
+FROM alpine:3.20
 WORKDIR /app
-COPY --from=build /workspace/target/telemetry-service-0.0.1-SNAPSHOT.jar app.jar
+COPY --from=build /out/telemetry-service /app/telemetry-service
 EXPOSE 8082
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["/app/telemetry-service"]

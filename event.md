@@ -54,6 +54,12 @@ Java tarafinda Telemetry Controller icin correlation header ve validation testle
 
 Acik kalan ortak issue'lar (#1, #2, #12, #13) tekrar degerlendirildi. #1 ve #2 icin altyapi, Docker Compose, `.env.example`, queue/event sozlesmeleri ve DLQ ayarlari zaten tamamlanmisti. #12 ve #13 icin README'ye calistirilabilir demo curl akisi, test komutlari, ekip gorev dagilimi, hafta bazli plan ve bilinen riskler eklendi. Boylece ortak issue'lar kapatilabilir hale getirildi.
 
+## 2026-05-31 21:35:00 +03
+
+Telemetry Service Go'ya tasindi. Neden: Kullanici Telemetry Service'in Go ile yazilmasini istedi ve bu karar eski proposal'da gecen Go fikriyle daha uyumlu. Nasil: Spring Boot/Maven kaynaklari kaldirildi; yerine Go 1.22 tabanli HTTP servis, Redis state writer ve RabbitMQ `telemetry.processed` publisher eklendi. Endpoint sozlesmesi degismedi: `POST /telemetry/ingest` ayni payload'i aliyor, `fillRate` hesapliyor, `X-Correlation-ID` varsa kullaniyor yoksa uretiyor, Redis'e `drone:{droneId}` TTL ile yaziyor ve RabbitMQ'ya JSON event yayinliyor.
+
+Tutarlilik duzeltmeleri: `docker-compose.yml` artik Telemetry Service'e Go servisinin bekledigi `REDIS_ADDR`, `RABBITMQ_URL`, `TELEMETRY_PROCESSED_QUEUE`, `DLQ_QUEUE` ve `DRONE_STATE_TTL_SECONDS` degiskenlerini veriyor. README servis tablosu ve test komutlari Spring Boot/Maven yerine Go 1.22 olarak guncellendi. Bu ortamda `go` kurulu olmadigi icin `go test ./...` lokal calistirilamadi; Docker build veya Go kurulu ortamda calistirilmasi gerekiyor.
+
 ## 2026-05-31 21:08:49 +03
 
 Python test calismasina baslandi. Neden: Deniz'e ait Notification Service ve Drone Simulator parcalarinin demo oncesi hizli dogrulanabilir olmasi gerekiyor; testlerin amaci tam entegrasyon yerine kritik davranislari kucuk fake/mock nesnelerle kontrol etmek. Nasil: `unittest` secildi, cunku ek test bagimliligi eklemiyor ve mevcut `requirements.txt` dosyasini sisirmiyor. Notification tarafinda gercek RabbitMQ olmadan fake `IncomingMessage` ve async context manager kullaniliyor; `aio-pika` yerelde kurulu degilse import kirilmasin diye test icinde minimal stub tanimlaniyor. Drone simulator tarafinda telemetry payload sozlesmesi, `send_telemetry` HTTP cagrisi ve servis kapaliyken `MAX_ITERATIONS=1` ana akisinin exception firlatmadan bitmesi test ediliyor.

@@ -44,6 +44,12 @@ RabbitMQ DLQ argumanlari hizalandi. Neden: Ayni queue birden fazla servis tarafi
 
 Test yazimi icin iki test muhendisi agent baslatildi. Kepler Python tarafindan (`notification-service`, `drone-simulator`) sorumlu. Lorentz Java/Spring tarafindan (`telemetry-service`, `task-assignment-service`) sorumlu. Neden: Test dosyalari servis bazinda ayrildigi icin paralel calismak cakisma riskini dusuk tutuyor. Hedef testleri abartmadan, juri veya demo oncesi kodun temel davranislarini dogrulayacak kadar kapsam eklemek.
 
+## 2026-05-31 21:14:45 +03
+
+Test kapsamı genisletildi. Python tarafinda Notification Service icin payload decode, invalid payload reject, `congestion.alert` log/ack davranisi ve DLQ metadata loglama test edildi. Drone simulator icin telemetry alan sozlesmesi, servis kapaliyken ana akisin patlamamasi ve `send_telemetry` status code donusu test edildi. `python3 -m unittest discover -s notification-service/tests -v` 4 test, `python3 -m unittest discover -s drone-simulator/tests -v` 3 test olarak basariyla gecti.
+
+Java tarafinda Telemetry Controller icin correlation header ve validation testleri, Task Assignment producer routing testi eklendi. Mevcut Task Assignment service/controller testleriyle birlikte bu testler Maven ortaminda calistirilacak. Bu makinede `mvn` olmadigi icin Java testleri lokal calistirilamadi; ancak POM XML parse kontrolu basariyla gecti.
+
 ## 2026-05-31 21:08:49 +03
 
 Python test calismasina baslandi. Neden: Deniz'e ait Notification Service ve Drone Simulator parcalarinin demo oncesi hizli dogrulanabilir olmasi gerekiyor; testlerin amaci tam entegrasyon yerine kritik davranislari kucuk fake/mock nesnelerle kontrol etmek. Nasil: `unittest` secildi, cunku ek test bagimliligi eklemiyor ve mevcut `requirements.txt` dosyasini sisirmiyor. Notification tarafinda gercek RabbitMQ olmadan fake `IncomingMessage` ve async context manager kullaniliyor; `aio-pika` yerelde kurulu degilse import kirilmasin diye test icinde minimal stub tanimlaniyor. Drone simulator tarafinda telemetry payload sozlesmesi, `send_telemetry` HTTP cagrisi ve servis kapaliyken `MAX_ITERATIONS=1` ana akisinin exception firlatmadan bitmesi test ediliyor.

@@ -1,0 +1,31 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: congestion-analysis
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        default-requeue-rejected: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+harborsync:
+  rabbitmq:
+    exchange: harborsync.exchange
+    queues:
+      telemetry-processed: telemetry.processed
+      congestion-alert: congestion.alert
+      dlq: dlq.errors
+  thresholds:
+    critical: 0.90
+    warning: 0.85

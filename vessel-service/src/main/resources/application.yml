@@ -1,0 +1,29 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: vessel-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/vessel_db}
+    username: ${SPRING_DATASOURCE_USERNAME:harbor}
+    password: ${SPRING_DATASOURCE_PASSWORD:harbor123}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  pattern:
+    console: "[%d{HH:mm:ss}] [%-5level] [%X{correlationId}] %logger{36} - %msg%n"

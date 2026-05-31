@@ -39,3 +39,27 @@ Dogrulama yapildi. `python3 -m py_compile` ile Notification Service ve Drone Sim
 ## 2026-05-31 21:02:44 +03
 
 RabbitMQ DLQ argumanlari hizalandi. Neden: Ayni queue birden fazla servis tarafindan declare edilirse RabbitMQ queue argumanlari birebir ayni degilse `PRECONDITION_FAILED` hatasi verir. Telemetry Service ve rapordaki ornekler `x-dead-letter-exchange` icin default exchange'i temsil eden bos string kullaniyordu. Task Assignment tarafinda da DLQ argumani `""` yapildi; routing key `dlq.errors` olarak kaldi. Boylece `congestion.alert` ve `task.created` queue'lari Notification Service ile ayni argumanlarla declare edilebilir.
+
+## 2026-05-31 21:08:28 +03
+
+Test yazimi icin iki test muhendisi agent baslatildi. Kepler Python tarafindan (`notification-service`, `drone-simulator`) sorumlu. Lorentz Java/Spring tarafindan (`telemetry-service`, `task-assignment-service`) sorumlu. Neden: Test dosyalari servis bazinda ayrildigi icin paralel calismak cakisma riskini dusuk tutuyor. Hedef testleri abartmadan, juri veya demo oncesi kodun temel davranislarini dogrulayacak kadar kapsam eklemek.
+
+## 2026-05-31 21:08:49 +03
+
+Python test calismasina baslandi. Neden: Deniz'e ait Notification Service ve Drone Simulator parcalarinin demo oncesi hizli dogrulanabilir olmasi gerekiyor; testlerin amaci tam entegrasyon yerine kritik davranislari kucuk fake/mock nesnelerle kontrol etmek. Nasil: `unittest` secildi, cunku ek test bagimliligi eklemiyor ve mevcut `requirements.txt` dosyasini sisirmiyor. Notification tarafinda gercek RabbitMQ olmadan fake `IncomingMessage` ve async context manager kullaniliyor; `aio-pika` yerelde kurulu degilse import kirilmasin diye test icinde minimal stub tanimlaniyor. Drone simulator tarafinda telemetry payload sozlesmesi, `send_telemetry` HTTP cagrisi ve servis kapaliyken `MAX_ITERATIONS=1` ana akisinin exception firlatmadan bitmesi test ediliyor.
+
+## 2026-05-31 21:09:08 +03
+
+Java/Spring test kapsami icin minimal test muhendisi turu baslatildi. Neden: Deniz'e atanmis servislerde kod yazildi, fakat juri veya demo oncesi davranisin testlerle kanitlanmasi gerekiyor. Asiri genis entegrasyon testleri yerine kritik sozlesmeleri dogrulayan unit/web-layer testleri secildi; boylece Maven kurulu bir ortamda hizli geri bildirim alinabilir.
+
+Telemetry Service icin `TelemetryControllerTest` eklendi. Nasil: `@WebMvcTest` ve mocked `TelemetryService` ile `POST /telemetry/ingest` endpointinin `X-Correlation-ID` headerini servis katmanina aynen tasidigi, 202 Accepted dondugu ve gecersiz payload icin servis cagrilmadan 400 validation cevabi urettigi dogrulaniyor. Bu test drone simulator ile Telemetry Service arasindaki HTTP sozlesmesini kapsiyor.
+
+Task Assignment Service icin `TaskCreatedProducerTest` eklendi. Nasil: Mock `RabbitTemplate` ile `task.created` olayinin `harborsync.exchange` uzerinden `task.created` routing key'ine gonderildigi dogrulaniyor. Bu, rapordaki event-driven akisin Notification Service ve diger tuketicilerle ayni routing sozlesmesini kullanmasini garanti altina almak icin secildi.
+
+## 2026-05-31 21:10:35 +03
+
+Test dogrulamasi yapildi. `python3 -m unittest discover -s notification-service/tests` 4 testi basariyla calistirdi. `python3 -m unittest discover -s drone-simulator/tests` 3 testi basariyla calistirdi. Java tarafinda `mvn -v` komutu `mvn: command not found` ile bitti; bu nedenle Spring testleri yerelde calistirilamadi, fakat Maven standart test dosyalari olarak yazildi ve Maven kurulu bir ortamda servis dizinlerinden calistirilabilir.
+
+## 2026-05-31 21:10:11 +03
+
+Python testleri calistirildi ve gecti. Neden: Test dosyalarinin sadece yazilmis olmasi yeterli degil; yerel ortamda bagimlilik yuklemeden calisabildigini de kanitlamak gerekiyor. Nasil: `python3 -m unittest discover -s notification-service/tests -v` komutu 4 testi basariyla gecirdi; JSON decode, gecersiz payload reddi, congestion alert log davranisi ve DLQ metadata loglamasi kontrol edildi. `python3 -m unittest discover -s drone-simulator/tests -v` komutu 3 testi basariyla gecirdi; telemetry alanlari, servis kapaliyken tek iterasyonluk ana akis ve HTTP status code donduren `send_telemetry` davranisi kontrol edildi.

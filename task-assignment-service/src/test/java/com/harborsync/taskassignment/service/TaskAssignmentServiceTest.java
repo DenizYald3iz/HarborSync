@@ -15,7 +15,6 @@ import com.harborsync.taskassignment.messaging.producer.TaskCreatedProducer;
 import com.harborsync.taskassignment.model.Task;
 import com.harborsync.taskassignment.model.TaskStatus;
 import com.harborsync.taskassignment.repository.TaskRepository;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -53,7 +52,7 @@ class TaskAssignmentServiceTest {
                 "HIGH",
                 0.94,
                 "REDIRECT_CRANE",
-                Instant.parse("2025-01-15T14:28:03Z")
+                "2025-01-15T14:28:03Z"
         );
     }
 
@@ -105,6 +104,6 @@ class TaskAssignmentServiceTest {
         Task result = taskAssignmentService.handleAlert(alert);
 
         assertThat(result.getStatus()).isEqualTo(TaskStatus.FAILED);
-        verify(taskRepository, times(2)).save(any(Task.class));
+        verify(taskRepository, times(1)).save(any(Task.class));
     }
 }

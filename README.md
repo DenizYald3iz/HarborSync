@@ -13,6 +13,62 @@ Distributed Port Cargo Coordination Platform for CENG-442 Microservice Architect
 | Task Assignment | Deniz | Spring Boot 3 + PostgreSQL + RabbitMQ | 8084 |
 | Notification Service | Deniz | FastAPI + RabbitMQ | 8085 |
 
+## Architecture Diagram
+
+```mermaid
+flowchart TB
+    subgraph External["External Input"]
+        DS[Drone Simulator]
+        RC[REST Client / Postman]
+    end
+
+    subgraph Gateway["API Gateway Layer"]
+        GW[API Gateway<br/>Spring Cloud Gateway<br/>Port 8080]
+        AF[Auth Filter<br/>X-API-Key]
+        CF[Correlation ID Filter]
+        RL[Rate Limiter<br/>10 req/s, burst 20]
+    end
+
+    subgraph Services["Microservices Layer"]
+        VS[Vessel Service<br/>Spring Boot 3<br/>Port 8081]
+        TS[Telemetry Service<br/>Go 1.22<br/>Port 8082]
+        CA[Congestion Analysis<br/>Spring Boot 3<br/>Port 8083]
+        TA[Task Assignment<br/>Spring Boot 3<br/>Port 8084]
+        NS[Notification Service<br/>FastAPI<br/>Port 8085]
+    end
+
+    subgraph Data["Data Layer"]
+        PGV[(PostgreSQL<br/>vessel_db)]
+        PGT[(PostgreSQL<br/>task_db)]
+        RD[(Redis)]
+        LOG[alerts.log]
+    end
+
+    subgraph Broker["Message Broker"]
+        RMQ[RabbitMQ<br/>harborsync.exchange]
+        Q1[telemetry.processed]
+        Q2[congestion.alert]
+        Q3[task.created]
+        Q4[dlq.errors]
+    end
+
+    DS -- HTTP POST /telemetry/ingest --> TS
+    RC -- HTTP --> GW
+    GW --> AF --> CF --> RL
+    RL --> VS
+    RL --> TA
+    TS --> Q1 --> CA
+    CA --> Q2 --> TA
+    CA --> Q2 --> NS
+    TA --> Q3 --> NS
+    TA -- REST GET /vessels --> VS
+    TA --> PGT
+    VS --> PGV
+    TS --> RD
+    NS --> LOG
+    RMQ --- Q1 & Q2 & Q3 & Q4
+```
+
 ## Local Stack
 
 ### Prerequisites
@@ -121,6 +177,7 @@ Create an arriving vessel through the gateway:
 ```bash
 curl -X POST http://localhost:8080/api/vessels \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: harborsync-secret-key" \
   -d '{"name":"MV-Ankara","imoNumber":"IMO1234567","eta":"2025-01-15T14:00:00"}'
 ```
 
@@ -136,7 +193,8 @@ curl -X POST http://localhost:8082/telemetry/ingest \
 Check pending tasks:
 
 ```bash
-curl http://localhost:8080/api/tasks/pending
+curl http://localhost:8080/api/tasks/pending \
+  -H "X-API-Key: harborsync-secret-key"
 ```
 
 Check notification logs:

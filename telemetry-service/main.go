@@ -196,6 +196,9 @@ func validateTelemetry(payload RawTelemetryPayload) error {
 	if payload.Capacity <= 0 {
 		return errors.New("capacity must be > 0")
 	}
+	if payload.ContainerCount > payload.Capacity {
+		return errors.New("containerCount must not exceed capacity")
+	}
 	if strings.TrimSpace(payload.Timestamp) == "" {
 		return errors.New("timestamp must not be blank")
 	}

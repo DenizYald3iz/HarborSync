@@ -4,6 +4,7 @@ import com.harborsync.taskassignment.client.VesselServiceClient;
 import com.harborsync.taskassignment.dto.CongestionAlertEvent;
 import com.harborsync.taskassignment.dto.TaskCreatedEvent;
 import com.harborsync.taskassignment.dto.VesselResponse;
+import com.harborsync.taskassignment.exception.TaskNotFoundException;
 import com.harborsync.taskassignment.messaging.producer.TaskCreatedProducer;
 import com.harborsync.taskassignment.model.Task;
 import com.harborsync.taskassignment.model.TaskStatus;
@@ -67,10 +68,9 @@ public class TaskAssignmentService {
             ));
         } catch (RuntimeException ex) {
             savedTask.setStatus(TaskStatus.FAILED);
-            Task failedTask = taskRepository.save(savedTask);
             log.error("Task event publish failed. taskId={} correlationId={} markedStatus=FAILED",
-                    failedTask.getId(), failedTask.getCorrelationId(), ex);
-            return failedTask;
+                    savedTask.getId(), savedTask.getCorrelationId(), ex);
+            return savedTask;
         }
 
         return savedTask;
@@ -84,7 +84,7 @@ public class TaskAssignmentService {
     @Transactional
     public Task completeTask(java.util.UUID id) {
         Task task = taskRepository.findById(id)
-                .orElseThrow(() -> new com.harborsync.taskassignment.exception.TaskNotFoundException(id));
+                .orElseThrow(() -> new TaskNotFoundException(id));
         task.setStatus(TaskStatus.COMPLETED);
         task.setCompletedAt(LocalDateTime.now());
         return taskRepository.save(task);

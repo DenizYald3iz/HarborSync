@@ -23,6 +23,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-harbor123}
     ports:
       - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-harbor} -d ${VESSEL_DB:-vessel_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-task:
     image: postgres:15
@@ -33,6 +38,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-harbor123}
     ports:
       - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-harbor} -d ${TASK_DB:-task_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -40,33 +50,35 @@ services:
     ports:
       - "6379:6379"
     command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   vessel-service:
     build: ./vessel-service
     container_name: vessel-service
+    restart: unless-stopped
     ports:
       - "8081:8081"
     depends_on:
       postgres-vessel:
-        condition: service_started
-      rabbitmq:
         condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://vessel-db:5432/${VESSEL_DB:-vessel_db}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-harbor}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-harbor123}
-      SPRING_RABBITMQ_HOST: rabbitmq
-      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-guest}
-      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-guest}
 
   telemetry-service:
     build: ./telemetry-service
     container_name: telemetry-service
+    restart: unless-stopped
     ports:
       - "8082:8082"
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     environment:
@@ -81,6 +93,7 @@ services:
   congestion-analysis:
     build: ./congestion-analysis
     container_name: congestion-analysis
+    restart: unless-stopped
     ports:
       - "8083:8083"
     depends_on:
@@ -94,11 +107,12 @@ services:
   task-assignment-service:
     build: ./task-assignment-service
     container_name: task-assignment-service
+    restart: unless-stopped
     ports:
       - "8084:8084"
     depends_on:
       postgres-task:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     environment:
@@ -113,6 +127,7 @@ services:
   notification-service:
     build: ./notification-service
     container_name: notification-service
+    restart: unless-stopped
     ports:
       - "8085:8085"
     depends_on:
@@ -128,11 +143,12 @@ services:
   gateway:
     build: ./gateway
     container_name: api-gateway
+    restart: unless-stopped
     ports:
       - "8080:8080"
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       vessel-service:
         condition: service_started
       task-assignment-service:
@@ -142,3 +158,4 @@ services:
       TASK_SERVICE_URL: http://task-assignment-service:8084
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      HARBORSYNC_API_KEY: ${HARBORSYNC_API_KEY:-harborsync-secret-key}

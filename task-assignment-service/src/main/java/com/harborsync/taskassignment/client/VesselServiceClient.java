@@ -2,6 +2,7 @@ package com.harborsync.taskassignment.client;
 
 import com.harborsync.taskassignment.dto.VesselResponse;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import java.time.Duration;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,7 +28,7 @@ public class VesselServiceClient {
                 .retrieve()
                 .bodyToFlux(VesselResponse.class)
                 .collectList()
-                .block();
+                .block(Duration.ofSeconds(10));
         return vessels == null ? List.of() : vessels;
     }
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import random
 import time
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
@@ -49,9 +50,11 @@ def generate_telemetry() -> dict[str, Any]:
 
 
 def send_telemetry(payload: dict[str, Any]) -> int | None:
+    correlation_id = f"sim-{uuid.uuid4().hex[:8]}"
     response = requests.post(
         TELEMETRY_URL,
         json=payload,
+        headers={"X-Correlation-ID": correlation_id},
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
     return response.status_code

@@ -50,6 +50,7 @@ class FakeMessage:
         message_id: str | None = None,
         routing_key: str | None = None,
         correlation_id: str | None = None,
+        headers: dict | None = None,
     ) -> None:
         if isinstance(payload, bytes):
             self.body = payload
@@ -58,12 +59,19 @@ class FakeMessage:
         self.message_id = message_id
         self.routing_key = routing_key
         self.correlation_id = correlation_id
+        self.headers = headers
         self.process_started = False
         self.process_finished = False
         self.requeue: bool | None = None
+        self.reject_called = False
+        self.reject_requeue: bool | None = None
 
     def process(self, *, requeue: bool) -> FakeProcess:
         return FakeProcess(self, requeue)
+
+    async def reject(self, requeue: bool = False) -> None:
+        self.reject_called = True
+        self.reject_requeue = requeue
 
 
 class ConsumerTests(unittest.TestCase):
@@ -106,17 +114,37 @@ class ConsumerTests(unittest.TestCase):
 
         self.assertTrue(message.process_started)
         self.assertTrue(message.process_finished)
-        self.assertFalse(message.requeue)
+        self.assertTrue(message.requeue)
         self.assertEqual(log_entries[0][0], "warning")
         self.assertEqual(log_entries[0][1], "CORR-ALERT")
         self.assertIn("sector=B-12", log_entries[0][2])
         self.assertIn("fill_rate=93%", log_entries[0][2])
 
+    def test_handle_congestion_alert_sends_to_dlq_after_max_attempts(self) -> None:
+        message = FakeMessage(
+            {"bad": "payload"},
+            headers={"x-delivery-count": 3},
+        )
+        log_entries: list[tuple[str, str | None, str]] = []
+
+        with patch.object(
+            consumer,
+            "_log",
+            side_effect=lambda level, correlation_id, message: log_entries.append(
+                (level, correlation_id, message)
+            ),
+        ):
+            asyncio.run(consumer.handle_congestion_alert(message))
+
+        self.assertTrue(message.reject_called)
+        self.assertFalse(message.reject_requeue)
+        self.assertIn("DLQ", log_entries[0][1])
+
     def test_handle_dlq_logs_message_metadata(self) -> None:
         message = FakeMessage(
             {"error": "bad payload"},
             message_id="MSG-1",
-            routing_key="telemetry.raw",
+            routing_key="congestion.alert",
             correlation_id="CORR-DLQ",
         )
         log_entries: list[tuple[str, str | None, str]] = []
@@ -133,7 +161,57 @@ class ConsumerTests(unittest.TestCase):
         self.assertEqual(log_entries[0][0], "error")
         self.assertEqual(log_entries[0][1], "CORR-DLQ")
         self.assertIn("message_id=MSG-1", log_entries[0][2])
-        self.assertIn("routing_key=telemetry.raw", log_entries[0][2])
+        self.assertIn("routing_key=congestion.alert", log_entries[0][2])
+
+
+    def test_handle_task_created_logs_info_and_acknowledges(self) -> None:
+        message = FakeMessage(
+            {
+                "correlationId": "CORR-TASK",
+                "taskId": "550e8400-e29b-41d4-a716-446655440000",
+                "sector": "B-12",
+                "assignedUnit": "Crane-1",
+                "priority": "HIGH",
+            }
+        )
+        log_entries: list[tuple[str, str | None, str]] = []
+
+        with patch.object(
+            consumer,
+            "_log",
+            side_effect=lambda level, correlation_id, message: log_entries.append(
+                (level, correlation_id, message)
+            ),
+        ):
+            asyncio.run(consumer.handle_task_created(message))
+
+        self.assertTrue(message.process_started)
+        self.assertTrue(message.process_finished)
+        self.assertTrue(message.requeue)
+        self.assertEqual(log_entries[0][0], "info")
+        self.assertEqual(log_entries[0][1], "CORR-TASK")
+        self.assertIn("task_id=550e8400-e29b-41d4-a716-446655440000", log_entries[0][2])
+        self.assertIn("assigned_unit=Crane-1", log_entries[0][2])
+
+    def test_handle_task_created_sends_to_dlq_after_max_attempts(self) -> None:
+        message = FakeMessage(
+            {"bad": "payload"},
+            headers={"x-delivery-count": 3},
+        )
+        log_entries: list[tuple[str, str | None, str]] = []
+
+        with patch.object(
+            consumer,
+            "_log",
+            side_effect=lambda level, correlation_id, message: log_entries.append(
+                (level, correlation_id, message)
+            ),
+        ):
+            asyncio.run(consumer.handle_task_created(message))
+
+        self.assertTrue(message.reject_called)
+        self.assertFalse(message.reject_requeue)
+        self.assertIn("DLQ", log_entries[0][1])
 
 
 if __name__ == "__main__":

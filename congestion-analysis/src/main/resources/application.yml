@@ -5,13 +5,21 @@ spring:
   application:
     name: congestion-analysis
   rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
     listener:
       simple:
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 2000
         default-requeue-rejected: false
+
+logging:
+  pattern:
+    console: "[%d{HH:mm:ss}] [%-5level] [%X{correlationId}] %logger{36} - %msg%n"
 
 management:
   endpoints:

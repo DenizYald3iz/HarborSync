@@ -4,7 +4,6 @@ Exchange: `harborsync.exchange` (`direct`)
 
 Queues:
 
-- `telemetry.raw`
 - `telemetry.processed`
 - `congestion.alert`
 - `task.created`

@@ -25,6 +25,10 @@ spring:
     password: ${SPRING_RABBITMQ_PASSWORD:guest}
     listener:
       simple:
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 2000
         default-requeue-rejected: false
 
 harborsync:
@@ -49,6 +53,10 @@ resilience4j:
         failure-rate-threshold: 50
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 2
+
+logging:
+  pattern:
+    console: "[%d{HH:mm:ss}] [%-5level] [%X{correlationId}] %logger{36} - %msg%n"
 
 management:
   endpoints:

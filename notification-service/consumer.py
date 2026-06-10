@@ -36,54 +36,88 @@ def _decode_payload(message: aio_pika.IncomingMessage) -> dict[str, Any]:
     return payload
 
 
-async def handle_congestion_alert(message: aio_pika.IncomingMessage) -> None:
-    async with message.process(requeue=False):
+MAX_DELIVERY_ATTEMPTS = 3
+
+
+def _delivery_count(message: aio_pika.IncomingMessage) -> int:
+    count = message.headers.get("x-delivery-count") if message.headers else None
+    return (count if isinstance(count, int) else 0) + 1
+
+
+async def _handle_with_retry(
+    message: aio_pika.IncomingMessage,
+    handler_name: str,
+    process_fn: callable,
+) -> None:
+    delivery = _delivery_count(message)
+    if delivery >= MAX_DELIVERY_ATTEMPTS:
+        await message.reject(requeue=False)
+        _log(
+            "error",
+            message.correlation_id or "DLQ",
+            f"{handler_name} failed after {delivery} attempts, sent to DLQ",
+        )
+        return
+
+    async with message.process(requeue=True):
         try:
             payload = _decode_payload(message)
-            correlation_id = payload.get("correlationId")
-            alert_type = payload.get("alertType", "UNKNOWN")
-            sector = payload.get("sector", "?")
-            severity = payload.get("severity", "?")
-            fill_rate = payload.get("fillRate")
-            recommended_action = payload.get("recommendedAction", "?")
-
-            fill_percent = "unknown"
-            if isinstance(fill_rate, (int, float)):
-                fill_percent = f"{fill_rate * 100:.0f}%"
-
-            _log(
-                "warning",
-                correlation_id,
-                (
-                    f"congestion.alert alert_type={alert_type} severity={severity} "
-                    f"sector={sector} fill_rate={fill_percent} "
-                    f"recommended_action={recommended_action}"
-                ),
-            )
+            process_fn(payload)
         except Exception as exc:
-            _log("error", "ERR", f"failed to process congestion.alert: {exc}")
+            _log(
+                "error",
+                "ERR",
+                f"{handler_name} attempt {delivery}/{MAX_DELIVERY_ATTEMPTS}: {exc}",
+            )
+            raise
+
+
+def _process_congestion_alert(payload: dict) -> None:
+    correlation_id = payload.get("correlationId")
+    alert_type = payload.get("alertType", "UNKNOWN")
+    sector = payload.get("sector", "?")
+    severity = payload.get("severity", "?")
+    fill_rate = payload.get("fillRate")
+    recommended_action = payload.get("recommendedAction", "?")
+
+    fill_percent = "unknown"
+    if isinstance(fill_rate, (int, float)):
+        fill_percent = f"{fill_rate * 100:.0f}%"
+
+    _log(
+        "warning",
+        correlation_id,
+        (
+            f"congestion.alert alert_type={alert_type} severity={severity} "
+            f"sector={sector} fill_rate={fill_percent} "
+            f"recommended_action={recommended_action}"
+        ),
+    )
+
+
+def _process_task_created(payload: dict) -> None:
+    correlation_id = payload.get("correlationId")
+    task_id = payload.get("taskId", "?")
+    sector = payload.get("sector", "?")
+    assigned_unit = payload.get("assignedUnit", "?")
+    priority = payload.get("priority", "?")
+
+    _log(
+        "info",
+        correlation_id,
+        (
+            f"task.created task_id={task_id} sector={sector} "
+            f"assigned_unit={assigned_unit} priority={priority}"
+        ),
+    )
+
+
+async def handle_congestion_alert(message: aio_pika.IncomingMessage) -> None:
+    await _handle_with_retry(message, "congestion.alert", _process_congestion_alert)
 
 
 async def handle_task_created(message: aio_pika.IncomingMessage) -> None:
-    async with message.process(requeue=False):
-        try:
-            payload = _decode_payload(message)
-            correlation_id = payload.get("correlationId")
-            task_id = payload.get("taskId", "?")
-            sector = payload.get("sector", "?")
-            assigned_unit = payload.get("assignedUnit", "?")
-            priority = payload.get("priority", "?")
-
-            _log(
-                "info",
-                correlation_id,
-                (
-                    f"task.created task_id={task_id} sector={sector} "
-                    f"assigned_unit={assigned_unit} priority={priority}"
-                ),
-            )
-        except Exception as exc:
-            _log("error", "ERR", f"failed to process task.created: {exc}")
+    await _handle_with_retry(message, "task.created", _process_task_created)
 
 
 async def handle_dlq(message: aio_pika.IncomingMessage) -> None:

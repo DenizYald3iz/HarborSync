@@ -2,11 +2,13 @@ package com.harborsync.vessel.service;
 
 import com.harborsync.vessel.domain.Vessel;
 import com.harborsync.vessel.domain.VesselStatus;
+import com.harborsync.vessel.dto.BerthReserveRequest;
 import com.harborsync.vessel.dto.CreateVesselRequest;
 import com.harborsync.vessel.dto.UpdateVesselStatusRequest;
 import com.harborsync.vessel.dto.VesselResponse;
 import com.harborsync.vessel.exception.VesselAlreadyExistsException;
 import com.harborsync.vessel.exception.VesselNotFoundException;
+import com.harborsync.vessel.messaging.producer.VesselLifecycleProducer;
 import com.harborsync.vessel.repository.VesselRepository;
 import java.util.List;
 import java.util.UUID;
@@ -21,9 +23,11 @@ public class VesselService {
     private static final Logger log = LoggerFactory.getLogger(VesselService.class);
 
     private final VesselRepository vesselRepository;
+    private final VesselLifecycleProducer lifecycleProducer;
 
-    public VesselService(VesselRepository vesselRepository) {
+    public VesselService(VesselRepository vesselRepository, VesselLifecycleProducer lifecycleProducer) {
         this.vesselRepository = vesselRepository;
+        this.lifecycleProducer = lifecycleProducer;
     }
 
     @Transactional
@@ -43,6 +47,7 @@ public class VesselService {
         Vessel saved = vesselRepository.save(vessel);
         log.info("Vessel registered id={} imoNumber={} status={}",
                 saved.getId(), saved.getImoNumber(), saved.getStatus());
+        lifecycleProducer.publish(saved);
         return toResponse(saved);
     }
 
@@ -80,6 +85,37 @@ public class VesselService {
         Vessel saved = vesselRepository.save(vessel);
         log.info("Vessel status updated id={} status={} berth={}",
                 saved.getId(), saved.getStatus(), saved.getBerth());
+        lifecycleProducer.publish(saved);
+        return toResponse(saved);
+    }
+
+    @Transactional
+    public VesselResponse reserveBerth(UUID id, BerthReserveRequest request) {
+        Vessel vessel = vesselRepository.findById(id)
+                .orElseThrow(() -> new VesselNotFoundException(id));
+
+        vessel.setStatus(VesselStatus.BERTHED);
+        vessel.setBerth(request.berth());
+
+        Vessel saved = vesselRepository.save(vessel);
+        log.info("Berth reserved id={} berth={} status={}",
+                saved.getId(), saved.getBerth(), saved.getStatus());
+        lifecycleProducer.publish(saved);
+        return toResponse(saved);
+    }
+
+    @Transactional
+    public VesselResponse releaseBerth(UUID id) {
+        Vessel vessel = vesselRepository.findById(id)
+                .orElseThrow(() -> new VesselNotFoundException(id));
+
+        vessel.setStatus(VesselStatus.ARRIVING);
+        vessel.setBerth(null);
+
+        Vessel saved = vesselRepository.save(vessel);
+        log.info("Berth released id={} status={}",
+                saved.getId(), saved.getStatus());
+        lifecycleProducer.publish(saved);
         return toResponse(saved);
     }
 

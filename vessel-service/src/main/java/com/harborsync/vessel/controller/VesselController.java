@@ -1,6 +1,7 @@
 package com.harborsync.vessel.controller;
 
 import com.harborsync.vessel.domain.VesselStatus;
+import com.harborsync.vessel.dto.BerthReserveRequest;
 import com.harborsync.vessel.dto.CreateVesselRequest;
 import com.harborsync.vessel.dto.UpdateVesselStatusRequest;
 import com.harborsync.vessel.dto.VesselResponse;
@@ -53,5 +54,19 @@ public class VesselController {
             @PathVariable UUID id,
             @Valid @RequestBody UpdateVesselStatusRequest request) {
         return vesselService.updateStatus(id, request);
+    }
+
+    @PutMapping("/{id}/berth/reserve")
+    @ResponseStatus(HttpStatus.OK)
+    public VesselResponse reserveBerth(
+            @PathVariable UUID id,
+            @Valid @RequestBody BerthReserveRequest request) {
+        return vesselService.reserveBerth(id, request);
+    }
+
+    @PutMapping("/{id}/berth/release")
+    @ResponseStatus(HttpStatus.OK)
+    public VesselResponse releaseBerth(@PathVariable UUID id) {
+        return vesselService.releaseBerth(id);
     }
 }

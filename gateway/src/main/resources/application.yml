@@ -46,7 +46,7 @@ management:
       enabled: true
 
 harborsync:
-  api-key: ${HARBORSYNC_API_KEY:harborsync-secret-key}
+  jwt-secret: ${HARBORSYNC_JWT_SECRET:harborsync-demo-jwt-secret}
 
 logging:
   pattern:

@@ -12,6 +12,10 @@ RABBITMQ_CONNECTION_RETRY_SECONDS = float(
 QUEUES = {
     "congestion_alert": os.getenv("CONGESTION_ALERT_QUEUE", "congestion.alert"),
     "task_created": os.getenv("TASK_CREATED_QUEUE", "task.created"),
+    "task_failed": os.getenv("TASK_FAILED_QUEUE", "task.failed"),
+    "vessel_arrived": os.getenv("VESSEL_ARRIVED_QUEUE", "vessel.arrived"),
+    "vessel_docked": os.getenv("VESSEL_DOCKED_QUEUE", "vessel.docked"),
+    "vessel_departed": os.getenv("VESSEL_DEPARTED_QUEUE", "vessel.departed"),
     "dlq": os.getenv("DLQ_QUEUE", "dlq.errors"),
 }
 

@@ -112,12 +112,50 @@ def _process_task_created(payload: dict) -> None:
     )
 
 
+def _process_task_failed(payload: dict) -> None:
+    correlation_id = payload.get("correlationId")
+    task_id = payload.get("taskId", "?")
+    sector = payload.get("sector", "?")
+    reason = payload.get("reason", "?")
+
+    _log(
+        "error",
+        correlation_id,
+        f"task.failed task_id={task_id} sector={sector} reason={reason}",
+    )
+
+
+def _process_vessel_event(payload: dict) -> None:
+    correlation_id = payload.get("correlationId")
+    vessel_id = payload.get("vesselId", "?")
+    imo_number = payload.get("imoNumber", "?")
+    status = payload.get("status", "?")
+    berth = payload.get("berth", "?")
+
+    _log(
+        "info",
+        correlation_id,
+        (
+            f"vessel.lifecycle vessel_id={vessel_id} imo_number={imo_number} "
+            f"status={status} berth={berth}"
+        ),
+    )
+
+
 async def handle_congestion_alert(message: aio_pika.IncomingMessage) -> None:
     await _handle_with_retry(message, "congestion.alert", _process_congestion_alert)
 
 
 async def handle_task_created(message: aio_pika.IncomingMessage) -> None:
     await _handle_with_retry(message, "task.created", _process_task_created)
+
+
+async def handle_task_failed(message: aio_pika.IncomingMessage) -> None:
+    await _handle_with_retry(message, "task.failed", _process_task_failed)
+
+
+async def handle_vessel_event(message: aio_pika.IncomingMessage) -> None:
+    await _handle_with_retry(message, "vessel.lifecycle", _process_vessel_event)
 
 
 async def handle_dlq(message: aio_pika.IncomingMessage) -> None:
@@ -179,13 +217,41 @@ async def start_consumers() -> AbstractRobustConnection:
         durable=True,
         arguments=dead_letter_arguments,
     )
+    task_failed_queue = await channel.declare_queue(
+        QUEUES["task_failed"],
+        durable=True,
+        arguments=dead_letter_arguments,
+    )
+    vessel_arrived_queue = await channel.declare_queue(
+        QUEUES["vessel_arrived"],
+        durable=True,
+        arguments=dead_letter_arguments,
+    )
+    vessel_docked_queue = await channel.declare_queue(
+        QUEUES["vessel_docked"],
+        durable=True,
+        arguments=dead_letter_arguments,
+    )
+    vessel_departed_queue = await channel.declare_queue(
+        QUEUES["vessel_departed"],
+        durable=True,
+        arguments=dead_letter_arguments,
+    )
 
     await congestion_queue.bind(exchange, routing_key=QUEUES["congestion_alert"])
     await task_queue.bind(exchange, routing_key=QUEUES["task_created"])
+    await task_failed_queue.bind(exchange, routing_key=QUEUES["task_failed"])
+    await vessel_arrived_queue.bind(exchange, routing_key=QUEUES["vessel_arrived"])
+    await vessel_docked_queue.bind(exchange, routing_key=QUEUES["vessel_docked"])
+    await vessel_departed_queue.bind(exchange, routing_key=QUEUES["vessel_departed"])
     await dlq_queue.bind(exchange, routing_key=QUEUES["dlq"])
 
     await congestion_queue.consume(handle_congestion_alert)
     await task_queue.consume(handle_task_created)
+    await task_failed_queue.consume(handle_task_failed)
+    await vessel_arrived_queue.consume(handle_vessel_event)
+    await vessel_docked_queue.consume(handle_vessel_event)
+    await vessel_departed_queue.consume(handle_vessel_event)
     await dlq_queue.consume(handle_dlq)
 
     _log(
@@ -193,7 +259,9 @@ async def start_consumers() -> AbstractRobustConnection:
         "INIT",
         (
             "Notification Service consumers started for queues "
-            f"{QUEUES['congestion_alert']}, {QUEUES['task_created']}, {QUEUES['dlq']}"
+            f"{QUEUES['congestion_alert']}, {QUEUES['task_created']}, "
+            f"{QUEUES['task_failed']}, {QUEUES['vessel_arrived']}, "
+            f"{QUEUES['vessel_docked']}, {QUEUES['vessel_departed']}, {QUEUES['dlq']}"
         ),
     )
     return connection

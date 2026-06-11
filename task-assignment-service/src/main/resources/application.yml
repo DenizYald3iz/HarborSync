@@ -37,6 +37,7 @@ harborsync:
     queues:
       congestion-alert: congestion.alert
       task-created: task.created
+      task-failed: task.failed
       dlq: dlq.errors
 
 vessel:

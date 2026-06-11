@@ -21,6 +21,7 @@ public class RabbitMqConfig {
     public static final String EXCHANGE = "harborsync.exchange";
     public static final String CONGESTION_ALERT_QUEUE = "congestion.alert";
     public static final String TASK_CREATED_QUEUE = "task.created";
+    public static final String TASK_FAILED_QUEUE = "task.failed";
     public static final String DLQ_ERRORS_QUEUE = "dlq.errors";
 
     @Bean
@@ -43,6 +44,13 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    public Queue taskFailedQueue() {
+        return QueueBuilder.durable(TASK_FAILED_QUEUE)
+                .withArguments(deadLetterArguments())
+                .build();
+    }
+
+    @Bean
     public Queue dlqErrorsQueue() {
         return QueueBuilder.durable(DLQ_ERRORS_QUEUE).build();
     }
@@ -59,6 +67,13 @@ public class RabbitMqConfig {
         return BindingBuilder.bind(taskCreatedQueue)
                 .to(harborSyncExchange)
                 .with(TASK_CREATED_QUEUE);
+    }
+
+    @Bean
+    public Binding taskFailedBinding(Queue taskFailedQueue, DirectExchange harborSyncExchange) {
+        return BindingBuilder.bind(taskFailedQueue)
+                .to(harborSyncExchange)
+                .with(TASK_FAILED_QUEUE);
     }
 
     @Bean

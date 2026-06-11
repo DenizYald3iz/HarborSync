@@ -13,6 +13,7 @@ import com.harborsync.vessel.dto.UpdateVesselStatusRequest;
 import com.harborsync.vessel.dto.VesselResponse;
 import com.harborsync.vessel.exception.VesselAlreadyExistsException;
 import com.harborsync.vessel.exception.VesselNotFoundException;
+import com.harborsync.vessel.messaging.producer.VesselLifecycleProducer;
 import com.harborsync.vessel.repository.VesselRepository;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,6 +30,9 @@ class VesselServiceTest {
 
     @Mock
     private VesselRepository vesselRepository;
+
+    @Mock
+    private VesselLifecycleProducer lifecycleProducer;
 
     @InjectMocks
     private VesselService vesselService;

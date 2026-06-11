@@ -8,6 +8,7 @@ import aio_pika
 from aio_pika.abc import AbstractRobustConnection
 
 from config import (
+    CONGESTION_ALERT_ROUTING_KEY,
     QUEUES,
     RABBITMQ_CONNECTION_RETRY_SECONDS,
     RABBITMQ_EXCHANGE,
@@ -238,7 +239,7 @@ async def start_consumers() -> AbstractRobustConnection:
         arguments=dead_letter_arguments,
     )
 
-    await congestion_queue.bind(exchange, routing_key=QUEUES["congestion_alert"])
+    await congestion_queue.bind(exchange, routing_key=CONGESTION_ALERT_ROUTING_KEY)
     await task_queue.bind(exchange, routing_key=QUEUES["task_created"])
     await task_failed_queue.bind(exchange, routing_key=QUEUES["task_failed"])
     await vessel_arrived_queue.bind(exchange, routing_key=QUEUES["vessel_arrived"])

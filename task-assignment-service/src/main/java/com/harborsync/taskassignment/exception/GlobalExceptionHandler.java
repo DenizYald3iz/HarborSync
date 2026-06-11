@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -20,7 +21,11 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    @ExceptionHandler({IllegalArgumentException.class, MethodArgumentNotValidException.class})
+    @ExceptionHandler({
+            IllegalArgumentException.class,
+            MethodArgumentNotValidException.class,
+            MethodArgumentTypeMismatchException.class
+    })
     public ResponseEntity<Map<String, Object>> handleBadRequest(Exception ex) {
         return error(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
@@ -40,4 +45,3 @@ public class GlobalExceptionHandler {
         ));
     }
 }
-

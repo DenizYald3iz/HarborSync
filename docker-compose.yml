@@ -65,6 +65,8 @@ services:
     depends_on:
       postgres-vessel:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://vessel-db:5432/${VESSEL_DB:-vessel_db}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-harbor}
@@ -139,7 +141,8 @@ services:
     environment:
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672/
       RABBITMQ_EXCHANGE: harborsync.exchange
-      CONGESTION_ALERT_QUEUE: congestion.alert
+      CONGESTION_ALERT_QUEUE: congestion.alert.notification
+      CONGESTION_ALERT_ROUTING_KEY: congestion.alert
       TASK_CREATED_QUEUE: task.created
       TASK_FAILED_QUEUE: task.failed
       VESSEL_ARRIVED_QUEUE: vessel.arrived

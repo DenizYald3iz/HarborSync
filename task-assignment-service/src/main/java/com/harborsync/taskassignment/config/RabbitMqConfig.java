@@ -19,7 +19,8 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMqConfig {
 
     public static final String EXCHANGE = "harborsync.exchange";
-    public static final String CONGESTION_ALERT_QUEUE = "congestion.alert";
+    public static final String CONGESTION_ALERT_ROUTING_KEY = "congestion.alert";
+    public static final String CONGESTION_ALERT_QUEUE = "congestion.alert.task-assignment";
     public static final String TASK_CREATED_QUEUE = "task.created";
     public static final String TASK_FAILED_QUEUE = "task.failed";
     public static final String DLQ_ERRORS_QUEUE = "dlq.errors";
@@ -59,7 +60,7 @@ public class RabbitMqConfig {
     public Binding congestionAlertBinding(Queue congestionAlertQueue, DirectExchange harborSyncExchange) {
         return BindingBuilder.bind(congestionAlertQueue)
                 .to(harborSyncExchange)
-                .with(CONGESTION_ALERT_QUEUE);
+                .with(CONGESTION_ALERT_ROUTING_KEY);
     }
 
     @Bean

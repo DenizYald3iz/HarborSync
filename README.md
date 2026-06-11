@@ -24,7 +24,7 @@ flowchart TB
 
     subgraph Gateway["API Gateway Layer"]
         GW[API Gateway<br/>Spring Cloud Gateway<br/>Port 8080]
-        AF[Auth Filter<br/>X-API-Key]
+        AF[Auth Filter<br/>Bearer JWT]
         CF[Correlation ID Filter]
         RL[Rate Limiter<br/>10 req/s, burst 20]
     end
@@ -47,7 +47,9 @@ flowchart TB
     subgraph Broker["Message Broker"]
         RMQ[RabbitMQ<br/>harborsync.exchange]
         Q1[telemetry.processed]
-        Q2[congestion.alert]
+        Q2[congestion.alert routing key]
+        Q2A[congestion.alert.task-assignment]
+        Q2B[congestion.alert.notification]
         Q3[task.created]
         Q4[dlq.errors]
     end
@@ -58,8 +60,9 @@ flowchart TB
     RL --> VS
     RL --> TA
     TS --> Q1 --> CA
-    CA --> Q2 --> TA
-    CA --> Q2 --> NS
+    CA --> Q2
+    Q2 --> Q2A --> TA
+    Q2 --> Q2B --> NS
     TA --> Q3 --> NS
     TA -- REST GET /vessels --> VS
     TA --> PGT
@@ -105,7 +108,7 @@ Important local defaults:
 | `VESSEL_DB` | `vessel_db` | Vessel DB |
 | `TASK_DB` | `task_db` | Task DB |
 | `REDIS_ADDR` | `redis:6379` | Telemetry Service |
-| `RABBITMQ_URL` | `amqp://guest:guest@rabbitmq:5672/` | Go/Python services |
+| `RABBITMQ_URL` | `amqp://guest:guest@rabbitmq:5672/` | Go/Python services inside Docker |
 
 ### Run Everything
 
@@ -116,6 +119,12 @@ docker compose up --build
 RabbitMQ Management UI: http://localhost:15672
 
 Default credentials are `guest` / `guest`.
+
+Host port mappings used by `docker-compose.yml`:
+
+- RabbitMQ AMQP: `localhost:15673` -> container `5672`
+- Vessel PostgreSQL: `localhost:15433` -> container `5432`
+- Task PostgreSQL: `localhost:15434` -> container `5432`
 
 Health endpoints:
 
@@ -157,12 +166,18 @@ Gateway routes:
 - `GET /api/vessels?status=ARRIVING` -> Vessel Service `GET /vessels`
 - `GET /api/vessels/{id}` -> Vessel Service `GET /vessels/{id}`
 - `PUT /api/vessels/{id}/status` -> Vessel Service `PUT /vessels/{id}/status`
+- `PUT /api/vessels/{id}/berth/reserve` -> Vessel Service `PUT /vessels/{id}/berth/reserve`
+- `PUT /api/vessels/{id}/berth/release` -> Vessel Service `PUT /vessels/{id}/berth/release`
 - `GET /api/tasks/pending` -> Task Assignment `GET /tasks/pending`
 - `PUT /api/tasks/{id}/complete` -> Task Assignment `PUT /tasks/{id}/complete`
 
 Telemetry ingest is exposed directly on `8082` for the drone simulator:
 
 - `POST /telemetry/ingest`
+
+Gateway API routes require `Authorization: Bearer <HS256 JWT>` signed with
+`HARBORSYNC_JWT_SECRET` (`harborsync-demo-jwt-secret` by default). Direct service
+ports are intended for local development and do not enforce gateway auth.
 
 ## Demo Flow
 
@@ -177,7 +192,7 @@ Create an arriving vessel through the gateway:
 ```bash
 curl -X POST http://localhost:8080/api/vessels \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: harborsync-secret-key" \
+  -H "Authorization: Bearer <demo-jwt>" \
   -d '{"name":"MV-Ankara","imoNumber":"IMO1234567","eta":"2025-01-15T14:00:00"}'
 ```
 
@@ -194,7 +209,7 @@ Check pending tasks:
 
 ```bash
 curl http://localhost:8080/api/tasks/pending \
-  -H "X-API-Key: harborsync-secret-key"
+  -H "Authorization: Bearer <demo-jwt>"
 ```
 
 Check notification logs:
@@ -226,7 +241,7 @@ Telemetry Service:
 ```bash
 cd telemetry-service
 REDIS_ADDR=localhost:6379 \
-RABBITMQ_URL=amqp://guest:guest@localhost:5672/ \
+RABBITMQ_URL=amqp://guest:guest@localhost:15673/ \
 go run .
 ```
 
@@ -239,7 +254,7 @@ mvn -f congestion-analysis/pom.xml spring-boot:run
 Task Assignment:
 
 ```bash
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5434/task_db \
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:15434/task_db \
 VESSEL_SERVICE_URL=http://localhost:8081 \
 mvn -f task-assignment-service/pom.xml spring-boot:run
 ```
@@ -251,7 +266,7 @@ cd notification-service
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
-RABBITMQ_URL=amqp://guest:guest@localhost:5672/ \
+RABBITMQ_URL=amqp://guest:guest@localhost:15673/ \
 uvicorn main:app --host 0.0.0.0 --port 8085
 ```
 
@@ -329,8 +344,8 @@ Central, the Go module proxy, and PyPI.
 
 ## Known Risks
 
-- Authentication and authorization are not implemented; production use would
-  need OAuth2/JWT or equivalent gateway-level auth.
+- Gateway-level demo JWT authentication is implemented. Production use should
+  add claim validation, expiry checks, key rotation, and a real identity provider.
 - RabbitMQ, databases, and gateway run as single local instances; this is
   acceptable for course/demo scope but not high availability.
 - Local secrets are plain environment variables. Production should use a secret
@@ -340,8 +355,9 @@ Central, the Go module proxy, and PyPI.
 
 ## Notification Service
 
-The FastAPI notification service listens to `congestion.alert`, `task.created`, and
-`dlq.errors` over RabbitMQ. It writes rotating structured logs to
+The FastAPI notification service listens to `congestion.alert.notification`,
+`task.created`, `task.failed`, `vessel.arrived`, `vessel.docked`,
+`vessel.departed`, and `dlq.errors` over RabbitMQ. It writes rotating structured logs to
 `notification-service/logs/alerts.log` with timestamp, level, correlation ID, and
 message fields.
 

@@ -3,14 +3,19 @@ from __future__ import annotations
 import os
 
 
-RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
+RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:15673/")
 RABBITMQ_EXCHANGE = os.getenv("RABBITMQ_EXCHANGE", "harborsync.exchange")
 RABBITMQ_CONNECTION_RETRY_SECONDS = float(
     os.getenv("RABBITMQ_CONNECTION_RETRY_SECONDS", "5")
 )
+CONGESTION_ALERT_ROUTING_KEY = os.getenv(
+    "CONGESTION_ALERT_ROUTING_KEY", "congestion.alert"
+)
 
 QUEUES = {
-    "congestion_alert": os.getenv("CONGESTION_ALERT_QUEUE", "congestion.alert"),
+    "congestion_alert": os.getenv(
+        "CONGESTION_ALERT_QUEUE", "congestion.alert.notification"
+    ),
     "task_created": os.getenv("TASK_CREATED_QUEUE", "task.created"),
     "task_failed": os.getenv("TASK_FAILED_QUEUE", "task.failed"),
     "vessel_arrived": os.getenv("VESSEL_ARRIVED_QUEUE", "vessel.arrived"),

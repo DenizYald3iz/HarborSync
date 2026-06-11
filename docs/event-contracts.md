@@ -5,7 +5,8 @@ Exchange: `harborsync.exchange` (`direct`)
 Queues:
 
 - `telemetry.processed`
-- `congestion.alert`
+- `congestion.alert.task-assignment` (bound with routing key `congestion.alert`)
+- `congestion.alert.notification` (bound with routing key `congestion.alert`)
 - `task.created`
 - `task.failed`
 - `vessel.arrived`
@@ -38,6 +39,13 @@ Consumer: Congestion Analysis
 Producer: Congestion Analysis
 
 Consumers: Task Assignment, Notification Service
+
+Routing key: `congestion.alert`
+
+Consumer queues:
+
+- Task Assignment: `congestion.alert.task-assignment`
+- Notification Service: `congestion.alert.notification`
 
 ```json
 {

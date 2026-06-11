@@ -5,7 +5,7 @@ spring:
   application:
     name: task-assignment-service
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5434/task_db}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:15434/task_db}
     username: ${SPRING_DATASOURCE_USERNAME:harbor}
     password: ${SPRING_DATASOURCE_PASSWORD:harbor123}
   jpa:
@@ -35,7 +35,7 @@ harborsync:
   rabbitmq:
     exchange: harborsync.exchange
     queues:
-      congestion-alert: congestion.alert
+      congestion-alert: congestion.alert.task-assignment
       task-created: task.created
       task-failed: task.failed
       dlq: dlq.errors
@@ -64,4 +64,3 @@ management:
     web:
       exposure:
         include: health,info
-

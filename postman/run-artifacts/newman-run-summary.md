@@ -23,7 +23,7 @@ Note: `/snap/bin/postman` exists on the machine, but it is the GUI snap package 
 Command used during local verification:
 
 ```bash
-/tmp/harborsync-newman/node_modules/.bin/newman run postman/HarborSync_Endpoint_Test_Collection.postman_collection.json -e postman/harborsync.local.postman_environment.json --reporters cli
+/tmp/harborsync-newman/node_modules/.bin/newman run postman/HarborSync_Endpoint_Test_Collection.postman_collection.json -e postman/harborsync.local.postman_environment.json --reporters cli,json --reporter-json-export postman/run-artifacts/endpoint-newman-report.json
 ```
 
 Result:
@@ -34,8 +34,8 @@ requests:          21 executed, 0 failed
 test-scripts:      21 executed, 0 failed
 prerequest-scripts: 22 executed, 0 failed
 assertions:        23 executed, 0 failed
-total duration:    9.7s
-average response:  65ms
+total duration:    8.7s
+average response:  15ms
 ```
 
 ## Simulation Collection
@@ -43,7 +43,7 @@ average response:  65ms
 Command used during local verification:
 
 ```bash
-/tmp/harborsync-newman/node_modules/.bin/newman run postman/HarborSync_Simulation_Collection.postman_collection.json -e postman/harborsync.local.postman_environment.json --reporters cli
+/tmp/harborsync-newman/node_modules/.bin/newman run postman/HarborSync_Simulation_Collection.postman_collection.json -e postman/harborsync.local.postman_environment.json --reporters cli,json --reporter-json-export postman/run-artifacts/simulation-newman-report.json
 ```
 
 Result:
@@ -55,7 +55,7 @@ test-scripts:      10 executed, 0 failed
 prerequest-scripts: 11 executed, 0 failed
 assertions:        10 executed, 0 failed
 total duration:    8.3s
-average response:  18ms
+average response:  14ms
 ```
 
 ## Saved Artifacts
@@ -64,5 +64,5 @@ average response:  18ms
 - `postman/HarborSync_Simulation_Collection.postman_collection.json`
 - `postman/harborsync.local.postman_environment.json`
 - `postman/run-artifacts/newman-run-summary.md`
-
-The raw Newman JSON reports generated during verification were not committed because they include resolved Authorization headers. Use the commands above to reproduce the terminal output locally.
+- `postman/run-artifacts/endpoint-newman-report.json`
+- `postman/run-artifacts/simulation-newman-report.json`

@@ -1,0 +1,25 @@
+# Calico CNI kurulumu (Tigera Operator) - HarborSync ozel agı tasarimi
+#
+# ONEMLI: ipPools.cidr degeri, kubeadm-init'teki podSubnet ile BIREBIR AYNI olmalidir.
+#   infra/kubeadm/kubeadm-init.example.yaml -> networking.podSubnet: 172.30.0.0/16
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  variant: Calico
+  calicoNetwork:
+    linuxDataplane: Iptables
+    bgp: Disabled
+    clusterRoutingMode: Felix
+    mtu: 1450
+    nodeAddressAutodetectionV4:
+      # Node IP'sinin hangi arayuzden bulunacagi. Kendi ortaminizdaki arayuz
+      # adiyla degistirin (ornek: "^eth0$", "^enp1s0$").
+      interface: "^ens18$"
+    ipPools:
+      - cidr: 172.30.0.0/16   # <-- kubeadm podSubnet ile ayni olmali
+        blockSize: 26
+        encapsulation: VXLAN
+        natOutgoing: Enabled
+        nodeSelector: "all()"

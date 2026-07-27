@@ -17,3 +17,26 @@ logs/*.log
 notification-service/logs/*.log
 
 .DS_Store
+
+# --- Kubernetes / cluster sirlari (ASLA commit edilmemeli) ---
+# PKI, TLS ozel anahtarlari ve sertifikalar
+*.key
+*.crt
+*.pem
+*.p12
+*.pfx
+harborsync-pki/
+harborsync-tls/
+# kubeadm bootstrap token / join sirlari
+*.secret.log
+kubeadm-init.secret.log
+# kubeconfig (admin erisimi)
+.kube/
+*kubeconfig*
+admin.conf
+# Not: infra/kubeadm/kubeadm-init.example.yaml sanitize edilmis ORNEKTIR, commit edilebilir.
+# Gercek kubeadm-init.yaml (canli IP/hostname icerir) commit edilmemeli:
+kubeadm-init.yaml
+
+# Kurumsal proxy build ayarlari (yerel build icin; public repoya girmemeli)
+**/maven-settings.xml

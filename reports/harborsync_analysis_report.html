@@ -1,0 +1,2581 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <title>HarborSync Mikroservis Analizi</title>
+  <style>
+    @page { size: A4; margin: 16mm 14mm; }
+    body {
+      font-family: "Noto Sans", "DejaVu Sans", Arial, sans-serif;
+      color: #17202a;
+      font-size: 10.5pt;
+      line-height: 1.42;
+      text-align: justify;
+    }
+    h1, h2, h3, h4 {
+      color: #0f172a;
+      line-height: 1.2;
+      page-break-after: avoid;
+      text-align: left;
+    }
+    h1 { font-size: 21pt; margin: 0 0 14px; }
+    h2 {
+      font-size: 15pt;
+      margin: 0 0 8px;
+      border-bottom: 1px solid #d8dee9;
+      padding-bottom: 4px;
+      page-break-before: always;
+    }
+    h3 { font-size: 12.5pt; margin: 16px 0 6px; }
+    h4 { font-size: 11pt; margin: 12px 0 4px; }
+    p { margin: 7px 0; }
+    .toc h2 { page-break-before: auto; }
+    .toc-list {
+      margin-top: 12px;
+      padding-left: 0;
+      list-style: none;
+      text-align: left;
+    }
+    .toc-list li { margin: 5px 0; }
+    .toc-list .toc-h3 { margin-left: 18px; font-size: 9.8pt; }
+    .toc-list a { color: #0f3b75; text-decoration: none; }
+    .page-break { page-break-before: always; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 9px 0 14px;
+      page-break-inside: avoid;
+      font-size: 8.8pt;
+      text-align: left;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 5px 6px;
+      vertical-align: top;
+    }
+    th {
+      background: #e9eef5;
+      font-weight: 700;
+    }
+    pre {
+      background: #f6f8fb;
+      border: 1px solid #d8dee9;
+      border-radius: 5px;
+      padding: 9px;
+      overflow: hidden;
+      white-space: pre-wrap;
+      page-break-inside: avoid;
+      font-size: 8.7pt;
+      line-height: 1.25;
+      text-align: left;
+    }
+    code {
+      font-family: "Noto Sans Mono", "DejaVu Sans Mono", monospace;
+      font-size: 0.92em;
+      background: #f1f5f9;
+      padding: 1px 3px;
+      border-radius: 3px;
+    }
+    pre code { background: transparent; padding: 0; border-radius: 0; }
+    .figure-caption {
+      margin-top: -7px;
+      margin-bottom: 12px;
+      font-size: 9pt;
+      font-style: italic;
+      color: #475569;
+      text-align: center;
+      page-break-before: avoid;
+    }
+    ul { margin-top: 5px; margin-bottom: 10px; padding-left: 18px; }
+    li { margin: 3px 0; }
+  </style>
+</head>
+<body>
+<h1 id="harborsync-mikroservis-analizi-ve-multi-master-kubernetes-tasarimi">HarborSync Mikroservis Analizi ve Multi-Master Kubernetes Tasarimi</h1>
+<section class="toc page-break">
+<h2>İçindekiler</h2>
+<ul class="toc-list">
+<li class="toc-h2"><a href="#1-yonetici-ozeti">1. Yönetici Özeti</a></li>
+<li class="toc-h2"><a href="#2-kaynaklardan-dogrulanan-bulgular">2. Kaynaklardan Dogrulanan Bulgular</a></li>
+<li class="toc-h2"><a href="#3-uygulama-mimarisi">3. Uygulama Mimarisi</a></li>
+<li class="toc-h3"><a href="#3-1-hiyerarsik-diyagram">3.1 Hiyerarsik Diyagram</a></li>
+<li class="toc-h3"><a href="#3-2-event-dependency-diyagrami">3.2 Event/Dependency Diyagrami</a></li>
+<li class="toc-h3"><a href="#3-3-senkron-ve-asenkron-bagimliliklar">3.3 Senkron ve Asenkron Bagimliliklar</a></li>
+<li class="toc-h2"><a href="#4-servis-sayisi">4. Servis Sayisi</a></li>
+<li class="toc-h2"><a href="#5-stateless-stateful-ayrimi">5. Stateless / Stateful Ayrimi</a></li>
+<li class="toc-h2"><a href="#6-trafik-beklentisi-ve-yogun-servisler">6. Trafik Beklentisi ve Yogun Servisler</a></li>
+<li class="toc-h2"><a href="#7-database-ve-bagimliliklar">7. Database ve Bagimliliklar</a></li>
+<li class="toc-h3"><a href="#7-1-postgresql">7.1 PostgreSQL</a></li>
+<li class="toc-h3"><a href="#7-2-redis">7.2 Redis</a></li>
+<li class="toc-h3"><a href="#7-3-rabbitmq">7.3 RabbitMQ</a></li>
+<li class="toc-h3"><a href="#7-4-diger-bagimliliklar">7.4 Diger Bagimliliklar</a></li>
+<li class="toc-h2"><a href="#8-ci-cd-ihtiyaci">8. CI/CD Ihtiyaci</a></li>
+<li class="toc-h2"><a href="#9-harborsync-icin-multi-master-kubernetes-tasarimi">9. HarborSync Icin Multi-Master Kubernetes Tasarimi</a></li>
+<li class="toc-h3"><a href="#9-1-tasarim-varsayimlari">9.1 Tasarim Varsayimlari</a></li>
+<li class="toc-h3"><a href="#9-2-harborsync-servislerinin-kubernetes-karsiligi">9.2 HarborSync Servislerinin Kubernetes Karsiligi</a></li>
+<li class="toc-h3"><a href="#9-3-hedef-multi-master-topoloji">9.3 Hedef Multi-Master Topoloji</a></li>
+<li class="toc-h3"><a href="#9-4-cluster-node-diyagrami">9.4 Cluster Node Diyagrami</a></li>
+<li class="toc-h3"><a href="#9-5-uygulama-kaynak-hesabi">9.5 Uygulama Kaynak Hesabi</a></li>
+<li class="toc-h3"><a href="#9-6-onerilen-vm-kaynaklari">9.6 Önerilen VM Kaynaklari</a></li>
+<li class="toc-h3"><a href="#9-7-ortam-ve-namespace-plani">9.7 Ortam ve Namespace Plani</a></li>
+<li class="toc-h3"><a href="#9-8-add-on-plani">9.8 Add-on Plani</a></li>
+<li class="toc-h3"><a href="#9-9-ingress-service-ve-network-akisi">9.9 Ingress, Service ve Network Akisi</a></li>
+<li class="toc-h3"><a href="#9-10-scheduling-anti-affinity-ve-pdb">9.10 Scheduling, Anti-Affinity ve PDB</a></li>
+<li class="toc-h3"><a href="#9-11-harborsync-icin-karar-ozeti">9.11 HarborSync Icin Karar Özeti</a></li>
+<li class="toc-h2"><a href="#10-ha-ihtiyaci">10. HA Ihtiyaci</a></li>
+<li class="toc-h2"><a href="#11-backup-restore-ihtiyaci">11. Backup/Restore Ihtiyaci</a></li>
+<li class="toc-h2"><a href="#12-guvenlik-ihtiyaci">12. Güvenlik Ihtiyaci</a></li>
+<li class="toc-h2"><a href="#13-cpu-ram-ihtiyaci">13. CPU/RAM Ihtiyaci</a></li>
+<li class="toc-h3"><a href="#13-1-uygulama-pod-baslangic-kaynaklari">13.1 Uygulama Pod Baslangiç Kaynaklari</a></li>
+<li class="toc-h3"><a href="#13-2-stateful-altyapi-baslangic-kaynaklari">13.2 Stateful Altyapi Baslangiç Kaynaklari</a></li>
+<li class="toc-h3"><a href="#13-3-calistirma-bazli-kaynak-olcumu-ve-net-request-limit-tablosu">13.3 Çalistirma Bazli Kaynak Ölçümü ve Net Request/Limit Tablosu</a></li>
+<li class="toc-h3"><a href="#13-4-cluster-kapasite-onerisi">13.4 Cluster Kapasite Önerisi</a></li>
+<li class="toc-h2"><a href="#14-replica-ihtiyaci">14. Replica Ihtiyaci</a></li>
+<li class="toc-h2"><a href="#15-operasyonel-gozlemler-ve-iyilestirme-listesi">15. Operasyonel Gözlemler ve Iyilestirme Listesi</a></li>
+<li class="toc-h2"><a href="#16-sonuc">16. Sonuç</a></li>
+<li class="toc-h2"><a href="#17-proxmox-ihtiyaci-demo-ortami">17. Proxmox Ihtiyaci - Demo Ortami</a></li>
+<li class="toc-h3"><a href="#17-1-demo-varsayimi">17.1 Demo Varsayimi</a></li>
+<li class="toc-h3"><a href="#17-2-istenen-demo-vm-kaynaklari">17.2 Istenen Demo VM Kaynaklari</a></li>
+<li class="toc-h3"><a href="#17-3-minimum-demo-toplami">17.3 Minimum Demo Toplami</a></li>
+<li class="toc-h3"><a href="#17-4-rahat-demo-toplami">17.4 Rahat Demo Toplami</a></li>
+<li class="toc-h3"><a href="#17-5-proxmox-fiziksel-host-onerisi">17.5 Proxmox Fiziksel Host Önerisi</a></li>
+<li class="toc-h3"><a href="#17-6-demo-icin-kaynaklari-kucuk-tutma-kararlari">17.6 Demo Icin Kaynaklari Küçük Tutma Kararlari</a></li>
+<li class="toc-h3"><a href="#17-7-net-talep-metni">17.7 Net Talep Metni</a></li>
+<li class="toc-h2"><a href="#18-uygulama-fazi-guncel-mentor-kararina-gore-yol-haritasi">18. Uygulama Fazi - Güncel Mentor Kararina Göre Yol Haritasi</a></li>
+<li class="toc-h3"><a href="#18-1-bu-projede-liderlik-prensibi">18.1 Bu Projede Liderlik Prensibi</a></li>
+<li class="toc-h3"><a href="#18-2-guncel-hedef-mimari">18.2 Güncel Hedef Mimari</a></li>
+<li class="toc-h3"><a href="#18-3-node-rolleri">18.3 Node Rolleri</a></li>
+<li class="toc-h3"><a href="#18-4-uygulama-siras">18.4 Uygulama Sirası</a></li>
+<li class="toc-h3"><a href="#18-5-kubernetes-icindeki-stateful-bilesenler">18.5 Kubernetes Içindeki Stateful Bilesenler</a></li>
+<li class="toc-h3"><a href="#18-6-namespace-plani">18.6 Namespace Plani</a></li>
+<li class="toc-h3"><a href="#18-7-manifest-ve-helm-yaklasm">18.7 Manifest ve Helm Yaklaşımı</a></li>
+<li class="toc-h3"><a href="#18-8-harborsync-deploy-siras">18.8 HarborSync Deploy Sirası</a></li>
+<li class="toc-h3"><a href="#18-9-ilk-basit-basari-kriteri">18.9 Ilk Basit Basari Kriteri</a></li>
+<li class="toc-h3"><a href="#18-10-senden-bekledigim-calsma-sekli">18.10 Senden Beklediğim Çalışma Şekli</a></li>
+<li class="toc-h3"><a href="#18-11-bu-fazda-ertelediklerimiz">18.11 Bu Fazda Ertelediklerimiz</a></li>
+<li class="toc-h3"><a href="#18-12-benim-sana-lead-edecegim-uygulama-sirasi">18.12 Benim Sana Lead Edeceğim Uygulama Sirasi</a></li>
+</ul>
+</section>
+<p>Bu rapor, <code>/home/deniz.yaldiz/practice_k8ns/HarborSync</code> altindaki kaynak kod, Docker Compose, servis konfigürasyonlari, event sözlesmeleri, testler ve Postman/Newman artifact&#x27;lari incelenerek hazirlandi. Kodda dogrulanan bilgiler ayrica belirtildi; kapasite ve Kubernetes önerileri ise mevcut demo yükü üzerine üretim hazirligi varsayimidir.</p>
+<h2 id="1-yonetici-ozeti">1. Yönetici Özeti</h2>
+<p>HarborSync, liman sahasindan gelen drone telemetrisini alip konteyner sektörü doluluk/tikaniklik durumunu analiz eden, gerektiginde görev üreten ve olaylari bildirim loglarina aktaran polyglot bir mikroservis sistemidir.</p>
+<p>Koddan dogrulanan ana uygulama servis sayisi 6&#x27;dır:</p>
+<table>
+<thead><tr>
+<th>#</th>
+<th>Servis</th>
+<th>Teknoloji</th>
+<th>Port</th>
+<th>Rol</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>API Gateway</td>
+<td>Spring Cloud Gateway</td>
+<td>8080</td>
+<td>Giris kapisi, JWT, correlation ID, Redis rate limit</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Vessel Service</td>
+<td>Spring Boot 3 + PostgreSQL</td>
+<td>8081</td>
+<td>Gemi kaydi/status/berth yönetimi, lifecycle event üretimi</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Telemetry Service</td>
+<td>Go 1.22 + Redis + RabbitMQ</td>
+<td>8082</td>
+<td>Drone telemetri ingest, Redis son durum, <code>telemetry.processed</code> üretimi</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Congestion Analysis</td>
+<td>Spring Boot 3 + RabbitMQ</td>
+<td>8083</td>
+<td>Telemetry tüketimi, tikaniklik kural motoru, alert üretimi</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Task Assignment</td>
+<td>Spring Boot 3 + PostgreSQL + RabbitMQ</td>
+<td>8084</td>
+<td>Alert tüketimi, görev üretimi, Vessel Service senkron çagri</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Notification Service</td>
+<td>FastAPI + RabbitMQ</td>
+<td>8085</td>
+<td>Event tüketimi, rotating structured log</td>
+</tr>
+</tbody>
+</table>
+<p>Altyapi bilesenleri uygulama servis sayisina dahil degildir: RabbitMQ, PostgreSQL-vessel, PostgreSQL-task, Redis. Drone Simulator yardimci trafik üretici script&#x27;tir, platform runtime mikroservisi olarak sayilmamalidir.</p>
+<p>Mevcut proje Docker Compose odaklidir; Kubernetes/Helm manifesti ve CI/CD pipeline dosyasi yoktur. Multi-master Kubernetes tasarimi için öneri: 3 control-plane + 3 worker node, ingress/LB ile Gateway üzerinden giris, PostgreSQL/RabbitMQ/Redis için HA operator veya tercihen managed servis, uygulama pod&#x27;lari stateless deployment olarak en az 2 replica.</p>
+<h2 id="2-kaynaklardan-dogrulanan-bulgular">2. Kaynaklardan Dogrulanan Bulgular</h2>
+<p>Ana runtime tanimi <code>docker-compose.yml</code> içinde yer alir. RabbitMQ, iki ayri PostgreSQL instance&#x27;i, Redis ve 6 uygulama servisi burada tanimlidir (<code>docker-compose.yml:1-171</code>). Gateway route ve rate-limit ayarlari <code>gateway/src/main/resources/application.yml:11-37</code> içinde; JWT secret <code>gateway/src/main/resources/application.yml:48-49</code> ile verilir.</p>
+<p>Telemetry Service <code>POST /telemetry/ingest</code> ve <code>GET /health</code> endpointlerini açar (<code>telemetry-service/main.go:132-135</code>). Ingest akisi payload&#x27;i valide eder, correlation ID üretir veya devralir, fill rate hesaplar, Redis&#x27;e drone state yazar ve RabbitMQ&#x27;ya event basar (<code>telemetry-service/main.go:145-183</code>). Redis yazma hatasi non-fatal ele alinmistir; RabbitMQ publish hatasi HTTP 502 döndürür.</p>
+<p>Congestion Analysis fill rate ve blockage kurallarini uygular: blockage + ETA varsa <code>IMMEDIATE_ACTION</code>, kritik esik üzeri <code>SECTOR_CRITICAL</code>, warning esigi üzeri <code>SECTOR_WARNING</code> (<code>congestion-analysis/.../CongestionRuleEngine.java:28-46</code>).</p>
+<p>Task Assignment alert geldiginde Vessel Service&#x27;ten arriving vessel listesini çeker, mümkünse berth reserve eder, task tablosuna yazar ve <code>task.created</code> event&#x27;i üretir (<code>task-assignment-service/.../TaskAssignmentService.java:47-92</code>). Publish hatasinda task&#x27;i FAILED yapar ve mümkünse berth release ile kompanzasyon dener (<code>TaskAssignmentService.java:93-122</code>).</p>
+<p>Notification Service RabbitMQ&#x27;dan congestion, task ve vessel lifecycle queue&#x27;larini tüketir; consumer QoS prefetch 10 olarak ayarlanmistir (<code>notification-service/consumer.py:195-245</code>). Loglar dosya ve console&#x27;a yazilir.</p>
+<p>Postman/Newman artifact&#x27;larina göre 2026-06-11 tarihinde endpoint koleksiyonu 21 request/23 assertion ve simulation koleksiyonu 10 request/10 assertion ile hatasiz kosmustur; ortalama response süreleri sirasiyla 15 ms ve 14 ms olarak kaydedilmistir (<code>postman/run-artifacts/newman-run-summary.md:21-58</code>).</p>
+<h2 id="3-uygulama-mimarisi">3. Uygulama Mimarisi</h2>
+<h3 id="3-1-hiyerarsik-diyagram">3.1 Hiyerarsik Diyagram</h3>
+<pre><code>HarborSync Platform
+|
++-- External Clients
+|   +-- REST/Postman/Operator Client
+|   +-- Drone Simulator
+|
++-- Edge Layer
+|   +-- API Gateway (8080)
+|       +-- JWT signature validation
+|       +-- X-Correlation-ID injection
+|       +-- Redis based rate limiting
+|       +-- Routes:
+|           +-- /api/vessels/** -&gt; Vessel Service
+|           +-- /api/tasks/**   -&gt; Task Assignment
+|
++-- Domain Services
+|   +-- Vessel Service (8081)
+|   |   +-- REST CRUD/status/berth
+|   |   +-- PostgreSQL vessel_db
+|   |   +-- RabbitMQ lifecycle producer
+|   |
+|   +-- Telemetry Service (8082)
+|   |   +-- REST telemetry ingest
+|   |   +-- Redis latest drone state, TTL 30s
+|   |   +-- RabbitMQ telemetry.processed producer
+|   |
+|   +-- Congestion Analysis (8083)
+|   |   +-- RabbitMQ telemetry.processed consumer
+|   |   +-- Rule engine
+|   |   +-- RabbitMQ congestion.alert producer
+|   |
+|   +-- Task Assignment (8084)
+|   |   +-- RabbitMQ congestion.alert.task-assignment consumer
+|   |   +-- REST /tasks API
+|   |   +-- PostgreSQL task_db
+|   |   +-- Sync dependency: Vessel Service
+|   |   +-- RabbitMQ task.created/task.failed producer
+|   |
+|   +-- Notification Service (8085)
+|       +-- RabbitMQ event consumers
+|       +-- Rotating file/console structured logs
+|
++-- Shared Infrastructure
+    +-- RabbitMQ direct exchange: harborsync.exchange
+    +-- PostgreSQL vessel_db
+    +-- PostgreSQL task_db
+    +-- Redis</code></pre>
+<p class="figure-caption">Şekil 1: HarborSync hiyerarsik uygulama mimarisi.</p>
+<h3 id="3-2-event-dependency-diyagrami">3.2 Event/Dependency Diyagrami</h3>
+<pre><code>Drone Simulator
+    |
+    | HTTP POST /telemetry/ingest
+    v
+Telemetry Service ---- Redis (latest drone state, TTL)
+    |
+    | RabbitMQ: telemetry.processed
+    v
+Congestion Analysis
+    |
+    | RabbitMQ routing key: congestion.alert
+    +------------------------------+
+    |                              |
+    v                              v
+Task Assignment                Notification Service
+    |                              ^
+    | REST GET/PUT                 |
+    v                              |
+Vessel Service ---- RabbitMQ vessel.* events
+    |
+    +-- PostgreSQL vessel_db
+
+Task Assignment ---- PostgreSQL task_db
+Task Assignment ---- RabbitMQ task.created/task.failed ----&gt; Notification Service
+
+REST Client -&gt; API Gateway -&gt; Vessel Service / Task Assignment
+API Gateway -&gt; Redis rate limiter</code></pre>
+<p class="figure-caption">Şekil 2: Servisler arasi event ve dependency akisi.</p>
+<h3 id="3-3-senkron-ve-asenkron-bagimliliklar">3.3 Senkron ve Asenkron Bagimliliklar</h3>
+<table>
+<thead><tr>
+<th>Kaynak</th>
+<th>Hedef</th>
+<th>Tip</th>
+<th>Etki</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>REST Client</td>
+<td>API Gateway</td>
+<td>HTTP</td>
+<td>Dis dünyaya açilan ana giris</td>
+</tr>
+<tr>
+<td>API Gateway</td>
+<td>Vessel Service</td>
+<td>HTTP</td>
+<td>Vessel API proxy</td>
+</tr>
+<tr>
+<td>API Gateway</td>
+<td>Task Assignment</td>
+<td>HTTP</td>
+<td>Task API proxy</td>
+</tr>
+<tr>
+<td>API Gateway</td>
+<td>Redis</td>
+<td>TCP</td>
+<td>Rate limit state; Redis kesilirse Gateway davranisi etkilenir</td>
+</tr>
+<tr>
+<td>Drone Simulator</td>
+<td>Telemetry Service</td>
+<td>HTTP</td>
+<td>Telemetry girisi</td>
+</tr>
+<tr>
+<td>Telemetry Service</td>
+<td>Redis</td>
+<td>TCP</td>
+<td>Son drone state, non-critical cache</td>
+</tr>
+<tr>
+<td>Telemetry Service</td>
+<td>RabbitMQ</td>
+<td>AMQP</td>
+<td>Telemetry event üretimi; publish hatasi ingest&#x27;i basarisiz yapar</td>
+</tr>
+<tr>
+<td>Congestion Analysis</td>
+<td>RabbitMQ</td>
+<td>AMQP</td>
+<td>Telemetry tüketimi ve alert üretimi</td>
+</tr>
+<tr>
+<td>Task Assignment</td>
+<td>RabbitMQ</td>
+<td>AMQP</td>
+<td>Alert tüketimi, task event üretimi</td>
+</tr>
+<tr>
+<td>Task Assignment</td>
+<td>Vessel Service</td>
+<td>HTTP</td>
+<td>Alert isleme sirasinda senkron liste/reserve/release</td>
+</tr>
+<tr>
+<td>Vessel Service</td>
+<td>PostgreSQL</td>
+<td>JDBC</td>
+<td>Stateful kalici veri</td>
+</tr>
+<tr>
+<td>Task Assignment</td>
+<td>PostgreSQL</td>
+<td>JDBC</td>
+<td>Stateful kalici veri</td>
+</tr>
+<tr>
+<td>Notification Service</td>
+<td>RabbitMQ</td>
+<td>AMQP</td>
+<td>Event tüketimi ve DLQ izleme</td>
+</tr>
+</tbody>
+</table>
+<h2 id="4-servis-sayisi">4. Servis Sayisi</h2>
+<p>Eksiksiz ayrim:</p>
+<table>
+<thead><tr>
+<th>Kategori</th>
+<th>Adet</th>
+<th>Bilesenler</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Uygulama mikroservisi</td>
+<td>6</td>
+<td>gateway, vessel-service, telemetry-service, congestion-analysis, task-assignment-service, notification-service</td>
+</tr>
+<tr>
+<td>Altyapi/runtime bagimliligi</td>
+<td>4 logical</td>
+<td>RabbitMQ, Redis, PostgreSQL vessel_db, PostgreSQL task_db</td>
+</tr>
+<tr>
+<td>Yardimci tool/script</td>
+<td>1</td>
+<td>drone-simulator</td>
+</tr>
+<tr>
+<td>Test/verification artifact</td>
+<td>-</td>
+<td>Postman collections, Newman reports, unit tests</td>
+</tr>
+</tbody>
+</table>
+<p>Not: PostgreSQL iki ayri container olarak çalisiyor; domain açisindan &quot;database per service&quot; yaklasimi vardir. Kubernetes tasariminda bunlar ayri PostgreSQL cluster/database olarak ele alinmalidir.</p>
+<h2 id="5-stateless-stateful-ayrimi">5. Stateless / Stateful Ayrimi</h2>
+<table>
+<thead><tr>
+<th>Bilesen</th>
+<th>Stateless/Stateful</th>
+<th>Gerekçe</th>
+<th>Kubernetes sonucu</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>API Gateway</td>
+<td>Stateless uygulama; Redis&#x27;e bagimli</td>
+<td>Pod içinde kalici veri yok, rate limit Redis&#x27;te</td>
+<td>Deployment, HPA uygun; Redis HA olmali</td>
+</tr>
+<tr>
+<td>Vessel Service</td>
+<td>Uygulama stateless, veri stateful</td>
+<td>Kalici veri PostgreSQL vessel_db&#x27;de</td>
+<td>Deployment + PostgreSQL HA</td>
+</tr>
+<tr>
+<td>Telemetry Service</td>
+<td>Uygulama stateless, Redis cache state</td>
+<td>Son drone state Redis TTL 30s</td>
+<td>Deployment + Redis HA; cache kaybi tolere edilebilir</td>
+</tr>
+<tr>
+<td>Congestion Analysis</td>
+<td>Stateless</td>
+<td>Sadece event tüketir, kural uygular</td>
+<td>Deployment, queue consumer scaling</td>
+</tr>
+<tr>
+<td>Task Assignment</td>
+<td>Uygulama stateless, veri stateful</td>
+<td>Kalici task verisi PostgreSQL task_db&#x27;de</td>
+<td>Deployment + PostgreSQL HA</td>
+</tr>
+<tr>
+<td>Notification Service</td>
+<td>Fiilen stateful log dosyasi var</td>
+<td>Rotating file log container filesystem&#x27;e yaziliyor</td>
+<td>Production&#x27;da stdout + log aggregation önerilir; dosya PV istenirse StatefulSet gerekebilir ama önerilmez</td>
+</tr>
+<tr>
+<td>RabbitMQ</td>
+<td>Stateful</td>
+<td>Queue, exchange, durable message</td>
+<td>RabbitMQ cluster/operator + PV</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>Stateful</td>
+<td>Kalici relational veri</td>
+<td>HA cluster + PV + backup</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>Duruma göre</td>
+<td>Rate limit ve drone state; compose&#x27;da persistence kapali</td>
+<td>HA Redis/Sentinel veya managed; cache-only kabul edilebilir</td>
+</tr>
+</tbody>
+</table>
+<h2 id="6-trafik-beklentisi-ve-yogun-servisler">6. Trafik Beklentisi ve Yogun Servisler</h2>
+<p>Koddan dogrulanan demo yükü: Drone Simulator varsayilan olarak 2 saniyede bir telemetry istegi atar, 3 drone ve 4 sektör ile rastgele payload üretir (<code>drone-simulator/simulate.py:13-35</code>). Gateway her route için IP basina 10 req/s replenish ve 20 burst limiti uygular (<code>gateway/src/main/resources/application.yml:20-37</code>).</p>
+<p>Üretim varsayimi için üç trafik profili:</p>
+<table>
+<thead><tr>
+<th>Profil</th>
+<th>Telemetry girisi</th>
+<th>REST API</th>
+<th>Event etkisi</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Demo/lab</td>
+<td>0.5 req/s</td>
+<td>Düsük</td>
+<td>Tek node Docker Compose yeterli</td>
+</tr>
+<tr>
+<td>Pilot liman</td>
+<td>50-150 telemetry req/s</td>
+<td>10-30 req/s</td>
+<td>RabbitMQ ve Congestion yatay ölçek ister</td>
+</tr>
+<tr>
+<td>Üretim</td>
+<td>300-1000 telemetry req/s</td>
+<td>50-200 req/s</td>
+<td>RabbitMQ, Telemetry, Congestion ve Task ana kapasite ekseni olur</td>
+</tr>
+</tbody>
+</table>
+<p>En yogun olmasi beklenen servisler:</p>
+<ul>
+<li>Telemetry Service: bütün drone verisinin ilk giris noktasi; HTTP ingest + Redis write + RabbitMQ publish yapar.</li>
+<li>RabbitMQ: event fan-out ve durable queue yükünün merkezi; HA ve disk I/O kritik.</li>
+<li>Congestion Analysis: telemetry queue tüketim hizini belirler; stateless oldugu için kolay ölçeklenir.</li>
+<li>Task Assignment: alert basina DB write + RabbitMQ publish + Vessel Service HTTP çagrisi yapar; en riskli orkestrasyon noktasi.</li>
+<li>PostgreSQL task_db: alert yogunlugunda write-heavy hale gelir.</li>
+</ul>
+<p>Olası bottleneckler:</p>
+<table>
+<thead><tr>
+<th>Bottleneck</th>
+<th>Neden</th>
+<th>Etki</th>
+<th>Öneri</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>RabbitMQ disk/queue birikimi</td>
+<td>Durable message + consumer gecikmesi</td>
+<td>Uçtan uca gecikme artar</td>
+<td>Queue depth alert, quorum queues, consumer HPA</td>
+</tr>
+<tr>
+<td>Task Assignment -&gt; Vessel senkron çagri</td>
+<td>Alert isleme içinde 10s bloklayan WebClient call</td>
+<td>Consumer throughput düser</td>
+<td>Timeout/circuit breaker mevcut; bulkhead ve async reserve düsünülebilir</td>
+</tr>
+<tr>
+<td>PostgreSQL task_db</td>
+<td>Her alert task insert yapar</td>
+<td>Write latency artar</td>
+<td>Index/connection pool tuning, read replica sadece raporlama için</td>
+</tr>
+<tr>
+<td>Gateway Redis</td>
+<td>Rate limiter Redis&#x27;e bagimli</td>
+<td>API girisi etkilenir</td>
+<td>Redis HA, fail-open/fail-closed karari</td>
+</tr>
+<tr>
+<td>Notification log file</td>
+<td>Container diskine log</td>
+<td>Pod reschedule&#x27;da log kaybi</td>
+<td>stdout + Loki/ELK/OpenSearch</td>
+</tr>
+<tr>
+<td>Consumer&#x27;siz <code>congestion.alert</code> queue</td>
+<td>Congestion Analysis kendi queue&#x27;sunu declare/bind ediyor ama consume etmiyor (<code>RabbitMqConfig.java:39-66</code>)</td>
+<td>RabbitMQ&#x27;da gereksiz mesaj birikimi</td>
+<td>Bu queue kaldirilmali; sadece routing key ve consumer queue&#x27;lari kalmali</td>
+</tr>
+</tbody>
+</table>
+<h2 id="7-database-ve-bagimliliklar">7. Database ve Bagimliliklar</h2>
+<h3 id="7-1-postgresql">7.1 PostgreSQL</h3>
+<p>Vessel Service:</p>
+<ul>
+<li>DB: <code>vessel_db</code></li>
+<li>Tablo: <code>vessels</code></li>
+<li>Önemli alanlar: <code>id</code>, <code>name</code>, <code>imo_number</code>, <code>status</code>, <code>berth</code>, <code>eta</code>, timestamps</li>
+<li>Constraint: IMO unique, status check, status index</li>
+</ul>
+<p>Task Assignment:</p>
+<ul>
+<li>DB: <code>task_db</code></li>
+<li>Tablo: <code>tasks</code></li>
+<li>Önemli alanlar: <code>id</code>, <code>sector</code>, <code>alert_type</code>, <code>assigned_unit</code>, <code>priority</code>, <code>status</code>, <code>correlation_id</code>, timestamps</li>
+<li>Constraint: status/priority check, status ve sector index</li>
+</ul>
+<h3 id="7-2-redis">7.2 Redis</h3>
+<ul>
+<li>Gateway rate limiter backend&#x27;i.</li>
+<li>Telemetry latest drone state cache&#x27;i: key <code>drone:&lt;droneId&gt;</code>, TTL 30s.</li>
+<li>Compose&#x27;da Redis persistence kapali: <code>redis-server --save &quot;&quot; --appendonly no</code> (<code>docker-compose.yml:47-52</code>).</li>
+</ul>
+<h3 id="7-3-rabbitmq">7.3 RabbitMQ</h3>
+<ul>
+<li>Exchange: <code>harborsync.exchange</code>, direct.</li>
+<li>Önemli queue/routing key&#x27;ler: <code>telemetry.processed</code>, <code>congestion.alert.task-assignment</code>, <code>congestion.alert.notification</code>, <code>task.created</code>, <code>task.failed</code>, <code>vessel.arrived</code>, <code>vessel.docked</code>, <code>vessel.departed</code>, <code>dlq.errors</code>.</li>
+<li>Business queue&#x27;larda DLQ argümanlari kullaniliyor.</li>
+<li>Notification prefetch 10 (<code>notification-service/consumer.py:195-198</code>).</li>
+</ul>
+<h3 id="7-4-diger-bagimliliklar">7.4 Diger Bagimliliklar</h3>
+<ul>
+<li>Java 17, Spring Boot 3.2.5, Spring Cloud Gateway 2023.0.1.</li>
+<li>Go 1.22, <code>amqp091-go</code>, <code>go-redis</code>.</li>
+<li>Python 3.11, FastAPI, uvicorn, aio-pika.</li>
+</ul>
+<h2 id="8-ci-cd-ihtiyaci">8. CI/CD Ihtiyaci</h2>
+<p>Mevcut repo içinde <code>.github</code>, <code>.gitlab-ci.yml</code>, Jenkinsfile, Drone CI veya benzeri pipeline bulunmadi. CI/CD ihtiyaci yüksektir; multi-master Kubernetes hedefi için elle build/deploy sürdürülebilir degildir.</p>
+<p>Önerilen pipeline:</p>
+<pre><code>Pull Request
+  -&gt; lint/static check
+  -&gt; unit tests:
+       Maven test x4
+       go test ./...
+       python unittest x2
+  -&gt; docker build for 6 images
+  -&gt; container scan + dependency scan + SBOM
+  -&gt; docker compose config validation
+  -&gt; optional integration/E2E: compose up + Newman collections
+  -&gt; push images to registry
+  -&gt; Helm/Kustomize render validation
+  -&gt; deploy to dev namespace
+  -&gt; smoke tests
+  -&gt; manual approval
+  -&gt; deploy to stage/prod with rolling/canary</code></pre>
+<p>Gerekli artifact&#x27;lar:</p>
+<ul>
+<li>Her servis için versioned container image.</li>
+<li>Helm chart veya Kustomize overlays: <code>dev</code>, <code>stage</code>, <code>prod</code>.</li>
+<li>Secret yönetimi: External Secrets / Vault / cloud secret manager.</li>
+<li>DB migration job stratejisi: Flyway migration&#x27;lari deploy sirasinda kontrollü kosmali.</li>
+</ul>
+<h2 id="9-harborsync-icin-multi-master-kubernetes-tasarimi">9. HarborSync Icin Multi-Master Kubernetes Tasarimi</h2>
+<p>Bu tasarim, projenin gerçek servis yapisi ve ölçülen kaynak tüketimi kullanilarak hazirlandi. Tasarim karari su siraya göre verildi: servis envanteri, stateless/stateful ayrimi, replica sayisi, container request/limit degerleri, add-on ihtiyaci, worker kapasitesi, control-plane HA, load balancer HA, dis bagimliliklar, monitoring/logging ve Proxmox toplam kapasitesi.</p>
+<h3 id="9-1-tasarim-varsayimlari">9.1 Tasarim Varsayimlari</h3>
+<table>
+<thead><tr>
+<th>Karar</th>
+<th>HarborSync icin secim</th>
+<th>Gerekce</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Kubernetes tipi</td>
+<td>Multi-master kubeadm cluster</td>
+<td>Control-plane HA ve DevOps pratigi hedefi</td>
+</tr>
+<tr>
+<td>etcd modeli</td>
+<td>Stacked etcd</td>
+<td>Lab/pilot icin daha sade; master disk latency kritik</td>
+</tr>
+<tr>
+<td>Load balancer</td>
+<td>2 VM, HAProxy + Keepalived</td>
+<td>API server ve Ingress VIP icin HA pratigi</td>
+</tr>
+<tr>
+<td>Worker sayisi</td>
+<td>3 worker</td>
+<td>Pod yayma, rolling update, node failure ve anti-affinity testi</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>Kubernetes disinda DB VM veya managed DB</td>
+<td>Stateful karmasikligi azaltir, DB backup/restore ayrisir</td>
+</tr>
+<tr>
+<td>RabbitMQ/Redis</td>
+<td>Lab icin cluster ici olabilir; prod icin managed/operator</td>
+<td>Mesajlasma ve rate-limit kritik bagimliliklar</td>
+</tr>
+<tr>
+<td>Ortam</td>
+<td>Once dev, sonra staging, prod simülasyonu en son</td>
+<td>Kaynak tüketimini kontrollü büyütmek icin</td>
+</tr>
+<tr>
+<td>Monitoring/GitOps</td>
+<td>Argo CD + Prometheus + Grafana + Loki önerilir</td>
+<td>DevOps pratiği ve görünürlük icin</td>
+</tr>
+</tbody>
+</table>
+<h3 id="9-2-harborsync-servislerinin-kubernetes-karsiligi">9.2 HarborSync Servislerinin Kubernetes Karsiligi</h3>
+<table>
+<thead><tr>
+<th>Bilesen</th>
+<th>Kubernetes nesnesi</th>
+<th>Replica</th>
+<th>Config/Secret</th>
+<th>Dis bagimlilik</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>API Gateway</td>
+<td>Deployment + Service + Ingress</td>
+<td>2</td>
+<td>JWT secret, downstream URL, Redis host</td>
+<td>Redis, Vessel, Task</td>
+</tr>
+<tr>
+<td>Vessel Service</td>
+<td>Deployment + Service</td>
+<td>2</td>
+<td>DB/RabbitMQ secret, env config</td>
+<td>PostgreSQL vessel_db, RabbitMQ</td>
+</tr>
+<tr>
+<td>Telemetry Service</td>
+<td>Deployment + Service</td>
+<td>3</td>
+<td>Redis/RabbitMQ env</td>
+<td>Redis, RabbitMQ</td>
+</tr>
+<tr>
+<td>Congestion Analysis</td>
+<td>Deployment + Service</td>
+<td>2</td>
+<td>RabbitMQ env, threshold ConfigMap</td>
+<td>RabbitMQ</td>
+</tr>
+<tr>
+<td>Task Assignment</td>
+<td>Deployment + Service</td>
+<td>2</td>
+<td>DB/RabbitMQ secret, Vessel URL</td>
+<td>PostgreSQL task_db, RabbitMQ, Vessel</td>
+</tr>
+<tr>
+<td>Notification Service</td>
+<td>Deployment + Service</td>
+<td>2</td>
+<td>RabbitMQ env, log config</td>
+<td>RabbitMQ, logging stack</td>
+</tr>
+<tr>
+<td>PostgreSQL vessel_db</td>
+<td>External DB / managed / VM</td>
+<td>-</td>
+<td>DB credentials</td>
+<td>Backup/PITR</td>
+</tr>
+<tr>
+<td>PostgreSQL task_db</td>
+<td>External DB / managed / VM</td>
+<td>-</td>
+<td>DB credentials</td>
+<td>Backup/PITR</td>
+</tr>
+<tr>
+<td>RabbitMQ</td>
+<td>Operator/StatefulSet veya external</td>
+<td>3 prod</td>
+<td>User/pass/TLS secret</td>
+<td>PV, backup definitions</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>Operator/StatefulSet veya external</td>
+<td>3 prod</td>
+<td>Auth/TLS secret</td>
+<td>Rate limit/cache</td>
+</tr>
+</tbody>
+</table>
+<p>Not: Yeni baslayan Kubernetes pratigi icin PostgreSQL&#x27;in cluster disinda tutulmasi dogru yaklasimdir. Böylece önce Deployment, Service, Ingress, HPA, GitOps, monitoring ve rollout pratigi netlesir.</p>
+<h3 id="9-3-hedef-multi-master-topoloji">9.3 Hedef Multi-Master Topoloji</h3>
+<pre><code>                          Users / Drone Clients
+                                  |
+                                  v
+                    +-----------------------------+
+                    |  Ingress VIP / App VIP      |
+                    |  HAProxy + Keepalived       |
+                    +-------------+---------------+
+                                  |
+                       +----------v----------+
+                       | Ingress Controller  |
+                       +----------+----------+
+                                  |
+                         +--------v--------+
+                         | API Gateway SVC |
+                         +--------+--------+
+                                  |
+        +-------------------------+-------------------------+
+        |                                                   |
++-------v--------+                                  +-------v--------+
+| Vessel Service |                                  | Task Assignment|
++-------+--------+                                  +-------+--------+
+        |                                                   |
+        | JDBC                                              | JDBC
+        v                                                   v
++------------------+                              +------------------+
+| external         |                              | external         |
+| PostgreSQL       |                              | PostgreSQL       |
+| vessel_db        |                              | task_db          |
++------------------+                              +------------------+
+
+Telemetry direct ingest -&gt; Telemetry Service -&gt; RabbitMQ -&gt; Congestion -&gt; Task/Notification
+                                 |              ^              |
+                                 v              |              v
+                              Redis        RabbitMQ HA     Log stack</code></pre>
+<p class="figure-caption">Şekil 3: HarborSync hedef multi-master Kubernetes topolojisi.</p>
+<h3 id="9-4-cluster-node-diyagrami">9.4 Cluster Node Diyagrami</h3>
+<pre><code>                 Kubernetes API VIP
+                         |
+        +----------------+----------------+
+        |                |                |
++-------v------+ +-------v------+ +-------v------+
+| master-1     | | master-2     | | master-3     |
+| api-server   | | api-server   | | api-server   |
+| scheduler    | | scheduler    | | scheduler    |
+| controller   | | controller   | | controller   |
+| stacked etcd | | stacked etcd | | stacked etcd |
++-------+------+ +-------+------+ +-------+------+
+        |                |                |
+        +----------------+----------------+
+                         |
+                 Kubernetes Cluster
+                         |
+        +----------------+----------------+
+        |                |                |
++-------v------+ +-------v------+ +-------v------+
+| worker-1     | | worker-2     | | worker-3     |
+| app pods     | | app pods     | | app pods     |
+| ingress      | | workers      | | monitoring   |
+| cni/coredns  | | cni/coredns  | | cni/coredns  |
++--------------+ +--------------+ +--------------+
+
++-----------+     +-----------+
+| lb-1      |&lt;---&gt;| lb-2      |
+| HAProxy   | VIP | HAProxy   |
+| Keepalived|     | Keepalived|
++-----------+     +-----------+</code></pre>
+<p class="figure-caption">Şekil 4: Multi-master cluster node ve load balancer yerlesimi.</p>
+<h3 id="9-5-uygulama-kaynak-hesabi">9.5 Uygulama Kaynak Hesabi</h3>
+<p>13.3 bölümündeki ölçümlerden ve HA replica kararlarindan hareketle uygulama request toplami asagidaki gibidir. Bu hesap sadece HarborSync uygulama pod&#x27;laridir; Kubernetes add-on&#x27;lari, monitoring/logging, image cache ve bos kapasite ayrica eklenmelidir.</p>
+<table>
+<thead><tr>
+<th>Servis</th>
+<th>Replica</th>
+<th>CPU request</th>
+<th>RAM request</th>
+<th>Toplam CPU</th>
+<th>Toplam RAM</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>API Gateway</td>
+<td>2</td>
+<td>250m</td>
+<td>512Mi</td>
+<td>500m</td>
+<td>1Gi</td>
+</tr>
+<tr>
+<td>Vessel Service</td>
+<td>2</td>
+<td>300m</td>
+<td>768Mi</td>
+<td>600m</td>
+<td>1.5Gi</td>
+</tr>
+<tr>
+<td>Telemetry Service</td>
+<td>3</td>
+<td>100m</td>
+<td>128Mi</td>
+<td>300m</td>
+<td>384Mi</td>
+</tr>
+<tr>
+<td>Congestion Analysis</td>
+<td>2</td>
+<td>250m</td>
+<td>512Mi</td>
+<td>500m</td>
+<td>1Gi</td>
+</tr>
+<tr>
+<td>Task Assignment</td>
+<td>2</td>
+<td>500m</td>
+<td>1Gi</td>
+<td>1000m</td>
+<td>2Gi</td>
+</tr>
+<tr>
+<td>Notification Service</td>
+<td>2</td>
+<td>100m</td>
+<td>128Mi</td>
+<td>200m</td>
+<td>256Mi</td>
+</tr>
+<tr>
+<td><strong>Toplam uygulama</strong></td>
+<td><strong>13 pod</strong></td>
+<td>-</td>
+<td>-</td>
+<td><strong>3.1 CPU</strong></td>
+<td><strong>~6.1Gi RAM</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Platform payi eklenmis worker ihtiyaci:</p>
+<table>
+<thead><tr>
+<th>Kalem</th>
+<th>CPU</th>
+<th>RAM</th>
+<th>Not</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>HarborSync uygulama request</td>
+<td>~3.1 CPU</td>
+<td>~6.1Gi</td>
+<td>13 pod</td>
+</tr>
+<tr>
+<td>Ingress + CNI + CoreDNS + metrics-server + cert-manager + MetalLB</td>
+<td>~1-2 CPU</td>
+<td>~2-4Gi</td>
+<td>Minimal platform</td>
+</tr>
+<tr>
+<td>Argo CD</td>
+<td>~0.5-1 CPU</td>
+<td>~1-2Gi</td>
+<td>GitOps</td>
+</tr>
+<tr>
+<td>Prometheus + Grafana + Loki</td>
+<td>~2-4 CPU</td>
+<td>~6-12Gi</td>
+<td>Retention&#x27;a göre büyür</td>
+</tr>
+<tr>
+<td>Bosluk payi</td>
+<td>+30-50%</td>
+<td>+30-50%</td>
+<td>Rolling update ve node failure icin</td>
+</tr>
+<tr>
+<td><strong>Önerilen worker havuzu</strong></td>
+<td><strong>12 CPU+</strong></td>
+<td><strong>36-48Gi+</strong></td>
+<td>3 worker x 4 CPU / 12-16Gi</td>
+</tr>
+</tbody>
+</table>
+<p>Sonuç: HarborSync uygulamasi tek basina küçük/orta boydur; worker boyutunu büyüten ana kalem monitoring/logging ve DevOps add-on&#x27;laridir. Bu nedenle 3 worker x 4 vCPU / 12-16 GB RAM mantikli baslangictir.</p>
+<h3 id="9-6-onerilen-vm-kaynaklari">9.6 Önerilen VM Kaynaklari</h3>
+<table>
+<thead><tr>
+<th>VM tipi</th>
+<th>Adet</th>
+<th>vCPU</th>
+<th>RAM</th>
+<th>Disk</th>
+<th>Not</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Load Balancer</td>
+<td>2</td>
+<td>1</td>
+<td>1-2 GB</td>
+<td>20 GB</td>
+<td>HAProxy + Keepalived</td>
+</tr>
+<tr>
+<td>Master</td>
+<td>3</td>
+<td>2</td>
+<td>6-8 GB</td>
+<td>60-80 GB SSD</td>
+<td>Stacked etcd; disk latency önemli</td>
+</tr>
+<tr>
+<td>Worker</td>
+<td>3</td>
+<td>4</td>
+<td>12-16 GB</td>
+<td>100-150 GB SSD</td>
+<td>App + add-on + monitoring</td>
+</tr>
+<tr>
+<td>External DB</td>
+<td>1</td>
+<td>2-4</td>
+<td>4-8 GB</td>
+<td>100-200 GB SSD</td>
+<td>Lab icin tek VM; prod icin HA/managed</td>
+</tr>
+<tr>
+<td>CI Runner</td>
+<td>1</td>
+<td>2</td>
+<td>4 GB</td>
+<td>50-100 GB</td>
+<td>Build/test/deploy job&#x27;lari</td>
+</tr>
+<tr>
+<td>Monitoring/Logging VM</td>
+<td>Opsiyonel</td>
+<td>2-4</td>
+<td>8-16 GB</td>
+<td>100-300 GB</td>
+<td>Cluster disi gözlemleme istenirse</td>
+</tr>
+</tbody>
+</table>
+<p>Minimum Proxmox host kapasitesi:</p>
+<table>
+<thead><tr>
+<th>Seviye</th>
+<th>CPU</th>
+<th>RAM</th>
+<th>Disk</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Minimum lab</td>
+<td>8 core / 16 thread</td>
+<td>64 GB</td>
+<td>1 TB SSD/NVMe</td>
+</tr>
+<tr>
+<td>Rahat lab/pilot</td>
+<td>12-16 core / 24-32 thread</td>
+<td>128 GB</td>
+<td>2 TB+ SSD/NVMe</td>
+</tr>
+<tr>
+<td>Gercek fiziksel HA</td>
+<td>3 fiziksel Proxmox node</td>
+<td>128 GB+ toplam/node profiline göre</td>
+<td>Replicated/ZFS/Ceph tasarimi</td>
+</tr>
+</tbody>
+</table>
+<p>Tek Proxmox host üzerinde 3 master + 3 worker kurmak Kubernetes seviyesinde HA pratigidir; fiziksel HA degildir. Host kapanirsa tüm cluster gider. Gercek HA için en az 3 fiziksel Proxmox node gerekir.</p>
+<h3 id="9-7-ortam-ve-namespace-plani">9.7 Ortam ve Namespace Plani</h3>
+<p>Baslangiçta tüm ortamlari ayni anda açmak yerine kademeli ilerlemek daha sagliklidir.</p>
+<table>
+<thead><tr>
+<th>Faz</th>
+<th>Namespace</th>
+<th>Replica yaklasimi</th>
+<th>Amaç</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Faz 1</td>
+<td><code>harborsync-dev</code></td>
+<td>Kritik servisler 1, Gateway 1</td>
+<td>Manifest, ingress, secret, config denemesi</td>
+</tr>
+<tr>
+<td>Faz 2</td>
+<td><code>harborsync-staging</code></td>
+<td>Gateway/Vessel/Task 2, Telemetry 2</td>
+<td>Rolling update, HPA, smoke test</td>
+</tr>
+<tr>
+<td>Faz 3</td>
+<td><code>harborsync-prod-sim</code></td>
+<td>Rapordaki replica hedefleri</td>
+<td>HA, node failure, backup/restore tatbikati</td>
+</tr>
+</tbody>
+</table>
+<p>Prod benzeri senaryoda namespace&#x27;ler:</p>
+<pre><code>harborsync-dev
+harborsync-staging
+harborsync-prod
+observability
+ingress-nginx
+cert-manager
+argocd
+external-secrets
+rabbitmq-system     # RabbitMQ operator kullanilirsa
+redis-system        # Redis operator kullanilirsa</code></pre>
+<h3 id="9-8-add-on-plani">9.8 Add-on Plani</h3>
+<table>
+<thead><tr>
+<th>Add-on</th>
+<th>Gerekli mi</th>
+<th>Kaynak etkisi</th>
+<th>Not</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>CNI</td>
+<td>Evet</td>
+<td>Düsük/orta</td>
+<td>Cilium veya Calico</td>
+</tr>
+<tr>
+<td>CoreDNS</td>
+<td>Evet</td>
+<td>Düsük</td>
+<td>Control plane icin temel</td>
+</tr>
+<tr>
+<td>Ingress Controller</td>
+<td>Evet</td>
+<td>Orta</td>
+<td>NGINX Ingress veya Traefik</td>
+</tr>
+<tr>
+<td>MetalLB</td>
+<td>Bare-metal/Proxmox icin evet</td>
+<td>Düsük</td>
+<td>LoadBalancer servis tipi icin</td>
+</tr>
+<tr>
+<td>cert-manager</td>
+<td>Önerilir</td>
+<td>Düsük</td>
+<td>TLS otomasyonu</td>
+</tr>
+<tr>
+<td>metrics-server</td>
+<td>Evet</td>
+<td>Düsük</td>
+<td>HPA icin gerekli</td>
+</tr>
+<tr>
+<td>Argo CD</td>
+<td>Önerilir</td>
+<td>Orta</td>
+<td>GitOps deploy modeli</td>
+</tr>
+<tr>
+<td>Prometheus/Grafana</td>
+<td>Önerilir</td>
+<td>Orta/yüksek</td>
+<td>Metrik ve dashboard</td>
+</tr>
+<tr>
+<td>Loki/Promtail</td>
+<td>Önerilir</td>
+<td>Orta/yüksek disk</td>
+<td>Log retention&#x27;a göre büyür</td>
+</tr>
+<tr>
+<td>KEDA</td>
+<td>Önerilir</td>
+<td>Düsük</td>
+<td>RabbitMQ queue depth bazli scale</td>
+</tr>
+<tr>
+<td>External Secrets</td>
+<td>Önerilir</td>
+<td>Düsük</td>
+<td>Vault/cloud secret entegrasyonu</td>
+</tr>
+</tbody>
+</table>
+<h3 id="9-9-ingress-service-ve-network-akisi">9.9 Ingress, Service ve Network Akisi</h3>
+<pre><code>Internet / Lab Client
+        |
+        v
+App VIP (HAProxy/Keepalived veya MetalLB)
+        |
+        v
+Ingress Controller
+        |
+        +--&gt; /api/vessels/**  -&gt; api-gateway -&gt; vessel-service
+        +--&gt; /api/tasks/**    -&gt; api-gateway -&gt; task-assignment-service
+        +--&gt; /telemetry/*     -&gt; telemetry-service veya gateway route karari
+
+Cluster internal:
+  task-assignment-service -&gt; vessel-service:8081
+  services -&gt; rabbitmq:5672
+  gateway/telemetry -&gt; redis:6379
+  vessel/task -&gt; external PostgreSQL endpoint</code></pre>
+<p class="figure-caption">Şekil 5: Ingress, service ve cluster içi network akisi.</p>
+<p>Güvenlik karari: Dis dünyaya sadece Ingress/Gateway açilmali. Vessel, Task, Congestion, Notification, RabbitMQ ve Redis ClusterIP veya internal endpoint olarak kalmali. Telemetry ingest dogrudan dis açilacaksa ayri rate-limit/auth karari gerekir.</p>
+<h3 id="9-10-scheduling-anti-affinity-ve-pdb">9.10 Scheduling, Anti-Affinity ve PDB</h3>
+<table>
+<thead><tr>
+<th>Bilesen</th>
+<th>Scheduling önerisi</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Gateway</td>
+<td>2 replica farkli worker node&#x27;lara yayilmali</td>
+</tr>
+<tr>
+<td>Telemetry</td>
+<td>3 replica mümkünse 3 worker&#x27;a dagilmali</td>
+</tr>
+<tr>
+<td>Task Assignment</td>
+<td>Vessel Service ile ayni node&#x27;a zorunlu baglanmamali; network üzerinden konusmali</td>
+</tr>
+<tr>
+<td>RabbitMQ</td>
+<td>Cluster icinde calisacaksa 3 node, podAntiAffinity ve ayrik PV</td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td>Worker kaynaklarini tüketmemesi icin request/limit net olmali</td>
+</tr>
+<tr>
+<td>PDB</td>
+<td>Gateway, Vessel, Task, Telemetry icin minimum available tanimlanmali</td>
+</tr>
+</tbody>
+</table>
+<h3 id="9-11-harborsync-icin-karar-ozeti">9.11 HarborSync Icin Karar Özeti</h3>
+<table>
+<thead><tr>
+<th>Karar basligi</th>
+<th>Nihai öneri</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Master</td>
+<td>3 adet, 2 vCPU / 6-8 GB RAM / 60-80 GB SSD</td>
+</tr>
+<tr>
+<td>Worker</td>
+<td>3 adet, 4 vCPU / 12-16 GB RAM / 100-150 GB SSD</td>
+</tr>
+<tr>
+<td>LB</td>
+<td>2 adet, 1 vCPU / 1-2 GB RAM / 20 GB disk</td>
+</tr>
+<tr>
+<td>DB</td>
+<td>Kubernetes disinda 1 DB VM ile basla; prod icin HA/managed PostgreSQL</td>
+</tr>
+<tr>
+<td>RabbitMQ</td>
+<td>Lab icin cluster ici mümkün; prod icin 3 node operator/managed</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>Lab icin tek/HA Redis; prod icin Sentinel/managed</td>
+</tr>
+<tr>
+<td>Replica</td>
+<td>Gateway 2, Vessel 2, Telemetry 3, Congestion 2, Task 2, Notification 2</td>
+</tr>
+<tr>
+<td>Kaynak toplamı</td>
+<td>Uygulama request ~3.1 CPU / ~6.1Gi RAM; add-on ve boslukla 36-48Gi worker RAM hedeflenmeli</td>
+</tr>
+<tr>
+<td>Ortam</td>
+<td>Dev ile basla, staging ekle, prod simülasyonu en son</td>
+</tr>
+<tr>
+<td>CI/CD</td>
+<td>Argo CD + image registry + test/build/scan pipeline</td>
+</tr>
+<tr>
+<td>Monitoring/logging</td>
+<td>Prometheus, Grafana, Loki; RabbitMQ queue depth ve JVM/DB metrikleri kritik</td>
+</tr>
+<tr>
+<td>Backup</td>
+<td>External PostgreSQL PITR, RabbitMQ definitions/PV snapshot, Velero manifests</td>
+</tr>
+</tbody>
+</table>
+<h2 id="10-ha-ihtiyaci">10. HA Ihtiyaci</h2>
+<p>HA ihtiyaci yüksektir çünkü sistem operasyonel karar üretir ve event zincirindeki kopukluk task/notification gecikmesine neden olur.</p>
+<table>
+<thead><tr>
+<th>Bilesen</th>
+<th>HA seviyesi</th>
+<th>Öneri</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Kubernetes API</td>
+<td>Kritik</td>
+<td>3 control-plane, stacked veya external etcd; API LB</td>
+</tr>
+<tr>
+<td>Gateway</td>
+<td>Yüksek</td>
+<td>En az 2 replica, PodDisruptionBudget</td>
+</tr>
+<tr>
+<td>Telemetry</td>
+<td>Yüksek</td>
+<td>En az 3 replica; rate ve publish latency izlenmeli</td>
+</tr>
+<tr>
+<td>Congestion</td>
+<td>Yüksek</td>
+<td>En az 2 replica; queue depth ile autoscale</td>
+</tr>
+<tr>
+<td>Task Assignment</td>
+<td>Kritik</td>
+<td>En az 2 replica; idempotency iyilestirilmeli</td>
+</tr>
+<tr>
+<td>Vessel</td>
+<td>Orta-yüksek</td>
+<td>En az 2 replica</td>
+</tr>
+<tr>
+<td>Notification</td>
+<td>Orta</td>
+<td>En az 2 replica; ayni queue&#x27;da competing consumer semantigi dikkate alinmali</td>
+</tr>
+<tr>
+<td>RabbitMQ</td>
+<td>Kritik</td>
+<td>3 node cluster, quorum queues</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>Kritik</td>
+<td>Primary + 2 replica, automatic failover</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>Orta-yüksek</td>
+<td>3 node Sentinel/cluster; rate limiter için HA</td>
+</tr>
+</tbody>
+</table>
+<h2 id="11-backup-restore-ihtiyaci">11. Backup/Restore Ihtiyaci</h2>
+<table>
+<thead><tr>
+<th>Veri</th>
+<th>Kritik mi</th>
+<th>Backup önerisi</th>
+<th>RPO/RTO hedefi</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>vessel_db</td>
+<td>Evet</td>
+<td>Günlük full + WAL archiving/PITR</td>
+<td>RPO &lt;= 5 dk, RTO &lt;= 30 dk</td>
+</tr>
+<tr>
+<td>task_db</td>
+<td>Evet</td>
+<td>Günlük full + WAL archiving/PITR</td>
+<td>RPO &lt;= 5 dk, RTO &lt;= 30 dk</td>
+</tr>
+<tr>
+<td>RabbitMQ durable queues</td>
+<td>Evet, kisa süreli</td>
+<td>Definitions export + persistent volumes snapshot; quorum queue</td>
+<td>RPO &lt;= 5-15 dk</td>
+</tr>
+<tr>
+<td>Redis rate/cache</td>
+<td>Düsük/orta</td>
+<td>Rate/cache ise backup gerekmez; kritik state eklenirse AOF/RDB</td>
+<td>RPO best-effort</td>
+</tr>
+<tr>
+<td>Notification logs</td>
+<td>Audit gerekiyorsa evet</td>
+<td>Merkezi log sistemi retention + object storage</td>
+<td>Retention 30-180 gün</td>
+</tr>
+<tr>
+<td>Kubernetes manifests/secrets</td>
+<td>Evet</td>
+<td>GitOps repo + sealed/external secrets</td>
+<td>Git restore</td>
+</tr>
+</tbody>
+</table>
+<p>Restore testleri ayda en az bir kez stage ortaminda denenmeli. PostgreSQL için <code>pgBackRest</code>, <code>Barman</code> veya operator native backup; RabbitMQ için definitions + PV snapshot; Kubernetes için Velero önerilir.</p>
+<h2 id="12-guvenlik-ihtiyaci">12. Güvenlik Ihtiyaci</h2>
+<p>Mevcut güvenlik durumu demo seviyesindedir:</p>
+<ul>
+<li>Gateway JWT filtresi sadece HS256 imzasini dogrular; exp/nbf/aud/iss/scope kontrolü yoktur (<code>JwtAuthFilter.java:54-65</code>).</li>
+<li>Default secret ve credential degerleri <code>.env.example</code> ve compose içinde görünür.</li>
+<li>Direct service portlari compose&#x27;da host&#x27;a açiktir.</li>
+<li>TLS/mTLS, network policy, pod security, image signing ve secret manager yoktur.</li>
+</ul>
+<p>Üretim önerileri:</p>
+<table>
+<thead><tr>
+<th>Alan</th>
+<th>Öneri</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Kimlik dogrulama</td>
+<td>OIDC provider, JWT claim validation, token expiry, JWKS/key rotation</td>
+</tr>
+<tr>
+<td>Network</td>
+<td>Sadece Ingress -&gt; Gateway dis açik; servisler ClusterIP; NetworkPolicy ile namespace içi kisit</td>
+</tr>
+<tr>
+<td>TLS</td>
+<td>Ingress TLS, iç trafik için mTLS/service mesh opsiyonel</td>
+</tr>
+<tr>
+<td>Secrets</td>
+<td>Kubernetes Secret yerine External Secrets + Vault/cloud secret manager</td>
+</tr>
+<tr>
+<td>RabbitMQ/PostgreSQL/Redis</td>
+<td>Strong credentials, TLS, least privilege user, network isolation</td>
+</tr>
+<tr>
+<td>Container</td>
+<td>Non-root user, read-only root FS, seccomp, drop capabilities</td>
+</tr>
+<tr>
+<td>Supply chain</td>
+<td>Image scan, SBOM, cosign signing, admission policy</td>
+</tr>
+<tr>
+<td>Observability</td>
+<td>Prometheus/Grafana, centralized logging, tracing, alerting</td>
+</tr>
+<tr>
+<td>API hardening</td>
+<td>Request size limit, schema validation, WAF/rate policy, actuator exposure kisitlama</td>
+</tr>
+</tbody>
+</table>
+<h2 id="13-cpu-ram-ihtiyaci">13. CPU/RAM Ihtiyaci</h2>
+<p>Kodda Kubernetes resource request/limit tanimi yoktur; asagidaki degerler pilot/üretime geçis için baslangiç önerisidir. JVM servislerinde gerçek heap ölçümü sonrasi ayar revize edilmelidir.</p>
+<h3 id="13-1-uygulama-pod-baslangic-kaynaklari">13.1 Uygulama Pod Baslangiç Kaynaklari</h3>
+<table>
+<thead><tr>
+<th>Servis</th>
+<th>Request CPU</th>
+<th>Request RAM</th>
+<th>Limit CPU</th>
+<th>Limit RAM</th>
+<th>Not</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>gateway</td>
+<td>250m</td>
+<td>512Mi</td>
+<td>1000m</td>
+<td>1Gi</td>
+<td>Reactive gateway + Redis rate limit</td>
+</tr>
+<tr>
+<td>vessel-service</td>
+<td>300m</td>
+<td>768Mi</td>
+<td>1500m</td>
+<td>1.5Gi</td>
+<td>Spring + JPA</td>
+</tr>
+<tr>
+<td>telemetry-service</td>
+<td>200m</td>
+<td>256Mi</td>
+<td>1000m</td>
+<td>512Mi</td>
+<td>Go servis, network/Rabbit publish yoğun</td>
+</tr>
+<tr>
+<td>congestion-analysis</td>
+<td>250m</td>
+<td>512Mi</td>
+<td>1000m</td>
+<td>1Gi</td>
+<td>Stateless rule engine</td>
+</tr>
+<tr>
+<td>task-assignment-service</td>
+<td>500m</td>
+<td>1Gi</td>
+<td>2000m</td>
+<td>2Gi</td>
+<td>JPA + Rabbit consumer + WebClient</td>
+</tr>
+<tr>
+<td>notification-service</td>
+<td>150m</td>
+<td>256Mi</td>
+<td>500m</td>
+<td>512Mi</td>
+<td>FastAPI/aio-pika</td>
+</tr>
+</tbody>
+</table>
+<h3 id="13-2-stateful-altyapi-baslangic-kaynaklari">13.2 Stateful Altyapi Baslangiç Kaynaklari</h3>
+<table>
+<thead><tr>
+<th>Bilesen</th>
+<th>Replica</th>
+<th>Request CPU</th>
+<th>Request RAM</th>
+<th>Storage</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>RabbitMQ</td>
+<td>3</td>
+<td>1000m</td>
+<td>2Gi</td>
+<td>50-100Gi SSD/PV per node</td>
+</tr>
+<tr>
+<td>PostgreSQL vessel</td>
+<td>3</td>
+<td>1000m</td>
+<td>4Gi</td>
+<td>100Gi+ SSD/PV</td>
+</tr>
+<tr>
+<td>PostgreSQL task</td>
+<td>3</td>
+<td>1000m</td>
+<td>4Gi</td>
+<td>100Gi+ SSD/PV</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>3</td>
+<td>500m</td>
+<td>1Gi</td>
+<td>10-20Gi opsiyonel</td>
+</tr>
+</tbody>
+</table>
+<h3 id="13-3-calistirma-bazli-kaynak-olcumu-ve-net-request-limit-tablosu">13.3 Çalistirma Bazli Kaynak Ölçümü ve Net Request/Limit Tablosu</h3>
+<p>Bu bölüm 2026-06-25 tarihinde proje Docker Compose ile çalistirilarak hazirlandi. Host üzerinde <code>keycloak</code> container&#x27;i 127.0.0.1:8080 portunu kullandigi için Compose Gateway 8080&#x27;e bind edemedi; mevcut servise dokunmadan ayni Gateway imaji <code>api-gateway-measure</code> adiyla <code>harborsync_default</code> network&#x27;ünde <code>18080:8080</code> portuyla çalistirildi.</p>
+<p>Ölçüm yöntemi:</p>
+<ul>
+<li>Tüm servis health endpointleri kontrol edildi: Gateway, Vessel, Telemetry, Congestion, Task Assignment ve Notification <code>UP</code> döndü.</li>
+<li>Boşta <code>docker stats --no-stream</code> ile kaynak tüketimi alindi.</li>
+<li>Kisa örnek yük uygulandi: Gateway üzerinden Vessel API&#x27;ye 80 GET, Telemetry Service&#x27;e 160 POST gönderildi. Bu trafik Congestion -&gt; Task Assignment -&gt; Notification event zincirini tetikledi.</li>
+<li>Yük sonrasi <code>task_db</code> içinde 92 adet <code>PENDING</code> task olustugu görüldü.</li>
+<li>RabbitMQ tarafinda <code>telemetry.processed</code>, <code>congestion.alert.task-assignment</code>, <code>congestion.alert.notification</code>, <code>task.created</code> kuyruklari bosaldi. Buna karsilik consumer&#x27;i olmayan <code>congestion.alert</code> kuyruğunda 92 mesaj birikti; bu, önceki bottleneck notunu çalistirma ile de dogruladi.</li>
+</ul>
+<p>Gözlenen runtime degerleri:</p>
+<table>
+<thead><tr>
+<th>Bilesen</th>
+<th>Boşta RAM</th>
+<th>Yükte tepe CPU</th>
+<th>Yükte tepe RAM</th>
+<th>Siniflandirma</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>API Gateway</td>
+<td>243Mi</td>
+<td>17.20%</td>
+<td>259Mi</td>
+<td>Basit/orta API gateway</td>
+</tr>
+<tr>
+<td>Vessel Service</td>
+<td>287Mi</td>
+<td>23.94%</td>
+<td>297Mi</td>
+<td>Basit API + JPA</td>
+</tr>
+<tr>
+<td>Telemetry Service</td>
+<td>5Mi</td>
+<td>2.83%</td>
+<td>7Mi</td>
+<td>Hafif ingest API/producer</td>
+</tr>
+<tr>
+<td>Congestion Analysis</td>
+<td>195Mi</td>
+<td>9.85%</td>
+<td>197Mi</td>
+<td>Worker/consumer</td>
+</tr>
+<tr>
+<td>Task Assignment</td>
+<td>415Mi</td>
+<td>63.52%</td>
+<td>484Mi</td>
+<td>Yogun worker/API + JPA</td>
+</tr>
+<tr>
+<td>Notification Service</td>
+<td>41Mi</td>
+<td>2.18%</td>
+<td>41Mi</td>
+<td>Hafif worker/consumer</td>
+</tr>
+<tr>
+<td>RabbitMQ</td>
+<td>151Mi</td>
+<td>81.32%</td>
+<td>152Mi</td>
+<td>Mesaj broker</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>5Mi</td>
+<td>2.96%</td>
+<td>5Mi</td>
+<td>Küçük Redis/cache</td>
+</tr>
+<tr>
+<td>PostgreSQL vessel_db</td>
+<td>65Mi</td>
+<td>5.57%</td>
+<td>66Mi</td>
+<td>Küçük lab DB</td>
+</tr>
+<tr>
+<td>PostgreSQL task_db</td>
+<td>52Mi</td>
+<td>1.16%</td>
+<td>52Mi</td>
+<td>Küçük lab DB</td>
+</tr>
+</tbody>
+</table>
+<p>Net Kubernetes request/limit önerisi:</p>
+<table>
+<thead><tr>
+<th>Servis tipi / bilesen</th>
+<th>CPU request</th>
+<th>RAM request</th>
+<th>CPU limit</th>
+<th>RAM limit</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>API Gateway</td>
+<td>250m</td>
+<td>512Mi</td>
+<td>1000m</td>
+<td>1Gi</td>
+</tr>
+<tr>
+<td>Vessel Service</td>
+<td>300m</td>
+<td>768Mi</td>
+<td>1500m</td>
+<td>1536Mi</td>
+</tr>
+<tr>
+<td>Telemetry Service</td>
+<td>100m</td>
+<td>128Mi</td>
+<td>500m</td>
+<td>512Mi</td>
+</tr>
+<tr>
+<td>Congestion Analysis</td>
+<td>250m</td>
+<td>512Mi</td>
+<td>1000m</td>
+<td>1Gi</td>
+</tr>
+<tr>
+<td>Task Assignment Service</td>
+<td>500m</td>
+<td>1Gi</td>
+<td>2000m</td>
+<td>2Gi</td>
+</tr>
+<tr>
+<td>Notification Service</td>
+<td>100m</td>
+<td>128Mi</td>
+<td>500m</td>
+<td>512Mi</td>
+</tr>
+<tr>
+<td>RabbitMQ küçük lab</td>
+<td>500m</td>
+<td>512Mi</td>
+<td>2000m</td>
+<td>2Gi</td>
+</tr>
+<tr>
+<td>RabbitMQ production baseline</td>
+<td>1000m</td>
+<td>2Gi</td>
+<td>2000m</td>
+<td>4Gi</td>
+</tr>
+<tr>
+<td>Redis küçük lab</td>
+<td>100m</td>
+<td>128Mi</td>
+<td>500m</td>
+<td>512Mi</td>
+</tr>
+<tr>
+<td>Redis production baseline</td>
+<td>250m</td>
+<td>512Mi</td>
+<td>500m</td>
+<td>1Gi</td>
+</tr>
+<tr>
+<td>PostgreSQL vessel_db küçük lab</td>
+<td>500m</td>
+<td>512Mi</td>
+<td>2000m</td>
+<td>2Gi</td>
+</tr>
+<tr>
+<td>PostgreSQL task_db küçük lab</td>
+<td>500m</td>
+<td>512Mi</td>
+<td>2000m</td>
+<td>2Gi</td>
+</tr>
+<tr>
+<td>PostgreSQL production baseline</td>
+<td>1000m</td>
+<td>2Gi</td>
+<td>2000m</td>
+<td>4Gi</td>
+</tr>
+</tbody>
+</table>
+<p>Yorum:</p>
+<ul>
+<li>Docker CPU yüzdesi kisa burst ölçümüdür; uzun süreli kapasite testi yerine baslangiç request/limit belirlemek için kullanildi.</li>
+<li>Spring/JVM servislerinde heap ve native memory payi nedeniyle observed RAM&#x27;in en az 2x&#x27;i request/limit kararinda korunmalidir. Bu yüzden 195-484Mi arasi gözlenen JVM pod&#x27;larina 512Mi-1Gi request önerildi.</li>
+<li>Task Assignment ölçümde en yüksek uygulama CPU&#x27;sunu gördü. Bunun sebebi alert tüketimi sirasinda hem PostgreSQL yazmasi hem Vessel Service HTTP çagrisi hem RabbitMQ publish yapmasidir.</li>
+<li>RabbitMQ kisa burst&#x27;te en yüksek CPU spike&#x27;i yapan altyapi bileseni oldu. Production&#x27;da queue depth ve disk I/O metrikleri ile HPA/KEDA degil, broker cluster kapasitesi ve quorum queue tasarimi belirleyici olacaktir.</li>
+<li>Telemetry Service Go ile yazildigi için RAM footprint çok düsük; buna ragmen network/RabbitMQ publish burst&#x27;leri için 100m/128Mi altina inilmemelidir.</li>
+<li>PostgreSQL lab ölçümünde RAM düsük görünür; gerçek üretim için buffer/cache, connection sayisi, WAL ve index büyüklügü nedeniyle 2Gi altina inilmemelidir.</li>
+</ul>
+<h3 id="13-4-cluster-kapasite-onerisi">13.4 Cluster Kapasite Önerisi</h3>
+<p>Minimum pilot: 3 worker x 8 vCPU/32 GB RAM. Stateful workload cluster içinde çalisacaksa bu kaynak ancak baslangiçtir; production için 3-5 worker x 16 vCPU/64 GB RAM daha rahat olur. Managed DB/Rabbit/Redis kullanilirsa 3 worker x 8 vCPU/32 GB RAM uygulama tarafi için yeterli baslangiçtir.</p>
+<h2 id="14-replica-ihtiyaci">14. Replica Ihtiyaci</h2>
+<table>
+<thead><tr>
+<th>Servis</th>
+<th>Min replica</th>
+<th>Autoscale önerisi</th>
+<th>Gerekçe</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>gateway</td>
+<td>2</td>
+<td>CPU/RPS/p95 latency</td>
+<td>Edge HA</td>
+</tr>
+<tr>
+<td>vessel-service</td>
+<td>2</td>
+<td>CPU/latency</td>
+<td>REST ve Task dependency HA</td>
+</tr>
+<tr>
+<td>telemetry-service</td>
+<td>3</td>
+<td>CPU/RPS/Rabbit publish latency</td>
+<td>En yogun ingest noktasi</td>
+</tr>
+<tr>
+<td>congestion-analysis</td>
+<td>2</td>
+<td>RabbitMQ <code>telemetry.processed</code> queue depth</td>
+<td>Stateless consumer</td>
+</tr>
+<tr>
+<td>task-assignment-service</td>
+<td>2</td>
+<td>RabbitMQ <code>congestion.alert.task-assignment</code> depth + CPU</td>
+<td>DB write ve Vessel dependency</td>
+</tr>
+<tr>
+<td>notification-service</td>
+<td>2</td>
+<td>Queue depth/CPU</td>
+<td>Bildirim gecikmesini azaltma</td>
+</tr>
+<tr>
+<td>RabbitMQ</td>
+<td>3</td>
+<td>N/A</td>
+<td>Quorum/cluster HA</td>
+</tr>
+<tr>
+<td>PostgreSQL cluster&#x27;lari</td>
+<td>3</td>
+<td>N/A</td>
+<td>Primary + replicas/failover</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>3</td>
+<td>N/A</td>
+<td>Sentinel/cluster HA</td>
+</tr>
+</tbody>
+</table>
+<p>KEDA, RabbitMQ queue depth&#x27;e göre Congestion ve Task consumer&#x27;larini ölçeklemek için uygundur. HPA yalniz CPU ile kullanilirsa event backlog geç fark edilebilir.</p>
+<h2 id="15-operasyonel-gozlemler-ve-iyilestirme-listesi">15. Operasyonel Gözlemler ve Iyilestirme Listesi</h2>
+<ul>
+<li><code>congestion.alert</code> consumer&#x27;siz queue birikimi düzeltilmeli. Congestion Analysis producer routing key kullanmali; kendi adina consume edilmeyen durable queue declare etmemeli.</li>
+<li>Task Assignment idempotency güçlendirilmeli. Ayni alert tekrar teslim edilirse duplicate task üretimi mümkün; correlationId + sector + alertType için idempotency key düsünülebilir.</li>
+<li>RabbitMQ publisher confirm kullanimi eklenmeli. Su an publish çagrilari uygulama seviyesinde basari kabul ediyor; broker confirm/return handling üretim için kritik.</li>
+<li>Notification log dosyasi container local filesystem yerine stdout + merkezi logging olmalı.</li>
+<li>JWT claim validation ve secret rotasyonu eklenmeli.</li>
+<li>Kubernetes manifests/Helm chart, resource request/limit, readiness/liveness probe, PDB ve NetworkPolicy yazilmali.</li>
+<li>DB migration deployment süreci netlesmeli: Flyway otomatik kosuyor, fakat multi-replica deployment sirasinda migration lock ve rollout sirasi kontrol edilmeli.</li>
+<li>Observability eklenmeli: RabbitMQ queue depth, consumer lag, DB latency, HTTP p95, error rate, JVM heap, Go runtime metrics.</li>
+</ul>
+<h2 id="16-sonuc">16. Sonuç</h2>
+<p>HarborSync mikroservis sinirlari net, event-driven akisi anlasilir ve Docker Compose ile dogrulanmis bir demo platformudur. Eksiksiz uygulama servis sayisi 6&#x27;dir. Üretim veya ciddi pilot hedefi için esas is, uygulama kodundan çok operasyonel katmandadir: HA RabbitMQ/PostgreSQL/Redis, Kubernetes deployment standartlari, CI/CD, secret yönetimi, observability, backup/restore ve güvenlik sertlestirmesi.</p>
+<p>Multi-master Kubernetes için önerilen baslangiç: 3 control-plane + 3 worker, uygulama pod&#x27;lari Deployment olarak en az 2 replica, Telemetry 3 replica, RabbitMQ/PostgreSQL/Redis HA olarak operator/managed servislerle kurulmalidir. Sistemin en kritik performans ekseni Telemetry -&gt; RabbitMQ -&gt; Congestion -&gt; Task Assignment zinciridir; kapasite testleri öncelikle bu zincir üzerinde yapilmalidir.</p>
+<h2 id="17-proxmox-ihtiyaci-demo-ortami">17. Proxmox Ihtiyaci - Demo Ortami</h2>
+<p>Bu bölüm demo ve pratik ortamı içindir. Sisteme gerçek üretim trafiği veya büyük veri girmeyecek; maksimum test verisi, kısa süreli load testleri ve Kubernetes/DevOps pratiği yapılacaktır. Bu nedenle Proxmox tarafında aşırı kaynak istemeye gerek yoktur. Gerçek production bir sistem olsaydı 9. bölümdeki daha geniş kaynak yaklaşımı, HA DB, daha büyük worker kaynakları, ayrı monitoring kapasitesi ve fiziksel HA dikkate alınmalıydı.</p>
+<h3 id="17-1-demo-varsayimi">17.1 Demo Varsayimi</h3>
+<table>
+<thead><tr>
+<th>Baslik</th>
+<th>Demo karari</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Trafik</td>
+<td>Düşük/orta test trafiği, kısa süreli burst</td>
+</tr>
+<tr>
+<td>Veri</td>
+<td>Az miktarda test verisi</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>Kubernetes dışında tek PostgreSQL VM yeterli</td>
+</tr>
+<tr>
+<td>RabbitMQ/Redis</td>
+<td>Demo için cluster içinde küçük kaynakla çalışabilir veya tek VM/container olarak tutulabilir</td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td>Hafif Prometheus/Grafana/Loki; uzun retention yok</td>
+</tr>
+<tr>
+<td>CI/CD</td>
+<td>Küçük bir runner VM yeterli</td>
+</tr>
+<tr>
+<td>Fiziksel HA</td>
+<td>Tek Proxmox host üzerinde Kubernetes HA pratiği; gerçek fiziksel HA değil</td>
+</tr>
+</tbody>
+</table>
+<h3 id="17-2-istenen-demo-vm-kaynaklari">17.2 Istenen Demo VM Kaynaklari</h3>
+<table>
+<thead><tr>
+<th>VM</th>
+<th>Adet</th>
+<th>vCPU</th>
+<th>RAM</th>
+<th>Disk</th>
+<th>Açiklama</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Load Balancer</td>
+<td>2</td>
+<td>1</td>
+<td>1 GB</td>
+<td>20 GB</td>
+<td>HAProxy + Keepalived için yeterli</td>
+</tr>
+<tr>
+<td>Master</td>
+<td>3</td>
+<td>2</td>
+<td>4-6 GB</td>
+<td>50-60 GB SSD</td>
+<td>Stacked etcd demo için yeterli; mümkünse SSD</td>
+</tr>
+<tr>
+<td>Worker</td>
+<td>3</td>
+<td>4</td>
+<td>8-12 GB</td>
+<td>80-100 GB SSD</td>
+<td>Uygulama pod&#x27;ları + temel add-on&#x27;lar</td>
+</tr>
+<tr>
+<td>External DB</td>
+<td>1</td>
+<td>2</td>
+<td>4 GB</td>
+<td>80-100 GB SSD</td>
+<td>Az test verisi için PostgreSQL yeterli</td>
+</tr>
+<tr>
+<td>CI Runner</td>
+<td>1</td>
+<td>2</td>
+<td>4 GB</td>
+<td>50 GB</td>
+<td>Build/test/deploy işleri için</td>
+</tr>
+<tr>
+<td>Monitoring VM</td>
+<td>Opsiyonel</td>
+<td>2</td>
+<td>4-8 GB</td>
+<td>80-100 GB</td>
+<td>Monitoring cluster dışında tutulacaksa</td>
+</tr>
+</tbody>
+</table>
+<h3 id="17-3-minimum-demo-toplami">17.3 Minimum Demo Toplami</h3>
+<p>Monitoring ayrı VM olarak açılmaz, monitoring/logging cluster içinde hafif tutulursa yaklaşık ihtiyaç:</p>
+<table>
+<thead><tr>
+<th>Kaynak</th>
+<th>Yaklaşik toplam</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>vCPU</td>
+<td>25 vCPU</td>
+</tr>
+<tr>
+<td>RAM</td>
+<td>50-65 GB</td>
+</tr>
+<tr>
+<td>VM disk</td>
+<td>650-800 GB</td>
+</tr>
+</tbody>
+</table>
+<p>Bu toplam, VM&#x27;lere ayrılan teorik kaynaktır. Proxmox host tarafında hypervisor, disk snapshot, image cache ve büyüme payı için ek boşluk bırakılmalıdır.</p>
+<h3 id="17-4-rahat-demo-toplami">17.4 Rahat Demo Toplami</h3>
+<p>Monitoring VM de açılacaksa veya worker&#x27;lara 12 GB RAM verilecekse daha rahat demo ihtiyacı:</p>
+<table>
+<thead><tr>
+<th>Kaynak</th>
+<th>Yaklaşik toplam</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>vCPU</td>
+<td>27-30 vCPU</td>
+</tr>
+<tr>
+<td>RAM</td>
+<td>70-85 GB</td>
+</tr>
+<tr>
+<td>VM disk</td>
+<td>800 GB - 1 TB</td>
+</tr>
+</tbody>
+</table>
+<h3 id="17-5-proxmox-fiziksel-host-onerisi">17.5 Proxmox Fiziksel Host Önerisi</h3>
+<table>
+<thead><tr>
+<th>Seviye</th>
+<th>CPU</th>
+<th>RAM</th>
+<th>Disk</th>
+<th>Uygunluk</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Minimum demo</td>
+<td>8 core / 16 thread</td>
+<td>64 GB</td>
+<td>1 TB SSD/NVMe</td>
+<td>Çalışır; monitoring/logging hafif tutulmalı</td>
+</tr>
+<tr>
+<td>Rahat demo</td>
+<td>12 core / 24 thread</td>
+<td>96 GB</td>
+<td>1.5 TB SSD/NVMe</td>
+<td>Daha sorunsuz demo ve snapshot alanı</td>
+</tr>
+<tr>
+<td>Çok rahat demo</td>
+<td>12-16 core / 24-32 thread</td>
+<td>128 GB</td>
+<td>2 TB SSD/NVMe</td>
+<td>Daha fazla ortam ve monitoring retention için</td>
+</tr>
+</tbody>
+</table>
+<p>Demo için en makul istek: 8 core / 16 thread CPU, 64 GB RAM ve 1 TB SSD/NVMe ile başlanabilir. Eğer elde imkan varsa 96 GB RAM ve 1.5 TB disk daha rahat olur. 128 GB RAM ve 2 TB disk production benzeri lab için konfor sağlar ama bu demo için zorunlu değildir.</p>
+<h3 id="17-6-demo-icin-kaynaklari-kucuk-tutma-kararlari">17.6 Demo Icin Kaynaklari Küçük Tutma Kararlari</h3>
+<table>
+<thead><tr>
+<th>Alan</th>
+<th>Demo karari</th>
+<th>Gerçek sistemde ne olurdu?</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>PostgreSQL</td>
+<td>Tek external DB VM</td>
+<td>HA PostgreSQL, replica, PITR, ayrı backup storage</td>
+</tr>
+<tr>
+<td>RabbitMQ</td>
+<td>Küçük cluster içi kurulum veya tek node lab</td>
+<td>3 node quorum queue cluster veya managed RabbitMQ</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>Tek küçük Redis veya hafif HA</td>
+<td>Sentinel/managed Redis</td>
+</tr>
+<tr>
+<td>Monitoring retention</td>
+<td>Kısa süreli, düşük disk</td>
+<td>Uzun retention, ayrı disk ve kapasite planı</td>
+</tr>
+<tr>
+<td>Worker RAM</td>
+<td>8-12 GB</td>
+<td>16 GB+ ve node sayısı artırımı</td>
+</tr>
+<tr>
+<td>Disk</td>
+<td>80-100 GB worker disk</td>
+<td>Image cache, log, volume ve retention&#x27;a göre 150-300 GB+</td>
+</tr>
+<tr>
+<td>Fiziksel HA</td>
+<td>Tek Proxmox host kabul</td>
+<td>En az 3 fiziksel host, shared/replicated storage</td>
+</tr>
+</tbody>
+</table>
+<h3 id="17-7-net-talep-metni">17.7 Net Talep Metni</h3>
+<p>Demo ortamı için Proxmox tarafında istenecek kaynak özeti:</p>
+<pre><code>2 adet Load Balancer VM:  1 vCPU, 1 GB RAM, 20 GB disk
+3 adet Master VM:         2 vCPU, 4-6 GB RAM, 50-60 GB SSD disk
+3 adet Worker VM:         4 vCPU, 8-12 GB RAM, 80-100 GB SSD disk
+1 adet External DB VM:    2 vCPU, 4 GB RAM, 80-100 GB SSD disk
+1 adet CI Runner VM:      2 vCPU, 4 GB RAM, 50 GB disk
+Opsiyonel Monitoring VM:  2 vCPU, 4-8 GB RAM, 80-100 GB disk</code></pre>
+<p>Bu kaynaklar HarborSync demosu, Kubernetes multi-master pratiği, rolling update, temel monitoring, GitOps ve kısa süreli test yükleri için yeterlidir. Gerçek production hedeflenseydi daha yüksek worker kaynakları, HA database, daha büyük disk, uzun log/metric retention ve fiziksel Proxmox HA tasarımı gerekir.</p>
+<h2 id="18-uygulama-fazi-guncel-mentor-kararina-gore-yol-haritasi">18. Uygulama Fazi - Güncel Mentor Kararina Göre Yol Haritasi</h2>
+<p>Bu bölüm raporun önceki analizinden sonra alınan güncel uygulama kararlarını temel alır. Önceki bölümlerde dış DB ve ayrı LB VM seçenekleri değerlendirilmişti; mentor kararıyla demo/pratik ortamı için tasarım artık şu şekilde uygulanacaktır:</p>
+<table>
+<thead><tr>
+<th>Konu</th>
+<th>Güncel karar</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Master node</td>
+<td>3 adet master/control-plane</td>
+</tr>
+<tr>
+<td>Worker node</td>
+<td>3 adet worker</td>
+</tr>
+<tr>
+<td>Load balancer</td>
+<td>Ayrı LB VM yok; HAProxy + Keepalived master node&#x27;lara kurulacak</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>PostgreSQL Kubernetes içine kurulacak</td>
+</tr>
+<tr>
+<td>RabbitMQ</td>
+<td>Kubernetes içine kurulacak</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>Kubernetes içine kurulacak</td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td>Helm ile Kubernetes içine kurulacak</td>
+</tr>
+<tr>
+<td>CI runner</td>
+<td>Şimdilik iptal; manuel build/deploy veya lokal pipeline ile ilerlenebilir</td>
+</tr>
+<tr>
+<td>Amaç</td>
+<td>Demo, öğrenme, mikroservis deploy pratiği, HA davranışı gözlemleme</td>
+</tr>
+</tbody>
+</table>
+<p>Bu kararla cluster daha öğretici hale gelir; çünkü sadece uygulama pod&#x27;larını değil, stateful workload, storage, Helm release, monitoring ve node failure etkilerini de göreceğiz. Bedeli şudur: Storage, backup, StatefulSet/Operator ve kaynak yönetimi artık daha dikkatli yapılmalıdır.</p>
+<h3 id="18-1-bu-projede-liderlik-prensibi">18.1 Bu Projede Liderlik Prensibi</h3>
+<p>Bu uygulamayı yaparken amacımız komut ezberlemek değil, her kararın neden verildiğini anlayarak ilerlemek. Her adımda üç soruya cevap arayacağız:</p>
+<ul>
+<li>Bu bileşen cluster içinde hangi problemi çözüyor?</li>
+<li>Bu bileşen bozulursa hangi servis etkilenir?</li>
+<li>Kurulumdan sonra çalıştığını hangi somut sinyalle doğrularız?</li>
+</ul>
+<p>Örnek: PostgreSQL&#x27;i kurmak sadece <code>helm install</code> çalıştırmak değildir. Önce şunu bilmeliyiz: Vessel Service ve Task Assignment kalıcı veri tutar; bu yüzden PostgreSQL pod&#x27;u silinse bile veri PV üzerinde kalmalıdır. Doğrulama da sadece pod <code>Running</code> görmek değildir; database&#x27;e bağlanıp schema migration&#x27;ın oluştuğunu ve servislerin health verdiğini görmektir.</p>
+<h3 id="18-2-guncel-hedef-mimari">18.2 Güncel Hedef Mimari</h3>
+<pre><code>                         Client / Operator / Drone
+                                  |
+                                  v
+                  +-----------------------------------+
+                  | VIP                               |
+                  | Keepalived on master nodes        |
+                  +----------------+------------------+
+                                   |
+                                   v
+                  +-----------------------------------+
+                  | HAProxy on master nodes           |
+                  | Kubernetes API + Ingress traffic  |
+                  +----------------+------------------+
+                                   |
+                         +---------v---------+
+                         | Ingress Controller|
+                         +---------+---------+
+                                   |
+                         +---------v---------+
+                         | API Gateway       |
+                         +----+---------+----+
+                              |         |
+                              v         v
+                    Vessel Service   Task Assignment
+                              |         |
+                              v         v
+                    PostgreSQL in Kubernetes
+
+Telemetry Service -&gt; Redis in Kubernetes
+Telemetry Service -&gt; RabbitMQ in Kubernetes -&gt; Congestion -&gt; Task/Notification
+Monitoring Helm chart -&gt; Prometheus/Grafana/Loki inside Kubernetes</code></pre>
+<p class="figure-caption">Şekil 6: Güncel mentor kararına göre HarborSync Kubernetes hedef mimarisi.</p>
+<h3 id="18-3-node-rolleri">18.3 Node Rolleri</h3>
+<table>
+<thead><tr>
+<th>Node</th>
+<th>Rol</th>
+<th>Üzerinde olacak ana işler</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>master-1</td>
+<td>Control-plane + HAProxy/Keepalived</td>
+<td>API server, scheduler, controller-manager, etcd, LB süreci</td>
+</tr>
+<tr>
+<td>master-2</td>
+<td>Control-plane + HAProxy/Keepalived</td>
+<td>API server, scheduler, controller-manager, etcd, LB süreci</td>
+</tr>
+<tr>
+<td>master-3</td>
+<td>Control-plane + HAProxy/Keepalived</td>
+<td>API server, scheduler, controller-manager, etcd, LB süreci</td>
+</tr>
+<tr>
+<td>worker-1</td>
+<td>Worker</td>
+<td>Uygulama pod&#x27;ları, ingress, monitoring parçaları</td>
+</tr>
+<tr>
+<td>worker-2</td>
+<td>Worker</td>
+<td>Uygulama pod&#x27;ları, RabbitMQ/Redis/PostgreSQL pod&#x27;ları</td>
+</tr>
+<tr>
+<td>worker-3</td>
+<td>Worker</td>
+<td>Uygulama pod&#x27;ları, monitoring/logging, stateful replica dağılımı</td>
+</tr>
+</tbody>
+</table>
+<p>Master node&#x27;lara LB kurulacak olması şu anlama gelir: Ayrı LB VM yönetmeyeceğiz, fakat master node&#x27;ların işletim sistemi seviyesinde HAProxy/Keepalived süreçleri doğru yönetilmelidir. Bu süreçler Kubernetes pod&#x27;u gibi değil, node üzerindeki systemd servisleri gibi düşünülmelidir.</p>
+<h3 id="18-4-uygulama-siras">18.4 Uygulama Sirası</h3>
+<p>Bu sırayı bozmayacağız; çünkü alttaki katman doğrulanmadan üst katmana çıkmak hata ayıklamayı zorlaştırır.</p>
+<table>
+<thead><tr>
+<th>Sıra</th>
+<th>Faz</th>
+<th>Amaç</th>
+<th>Bittiğini nasıl anlarız?</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>VM ve OS hazırlığı</td>
+<td>3 master + 3 worker hazır olmalı</td>
+<td>Hostname, static IP, DNS/hosts, SSH, disk hazır</td>
+</tr>
+<tr>
+<td>2</td>
+<td>HAProxy + Keepalived</td>
+<td>Kubernetes API VIP hazır olmalı</td>
+<td>VIP hangi master aktifse orada görülür, API portu cevap verir</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Kubernetes bootstrap</td>
+<td>Multi-master control-plane kurulmalı</td>
+<td><code>kubectl get nodes</code> 6 node&#x27;u gösterir</td>
+</tr>
+<tr>
+<td>4</td>
+<td>CNI kurulumu</td>
+<td>Pod network çalışmalı</td>
+<td>CoreDNS Running, pod&#x27;lar node&#x27;lar arası konuşur</td>
+</tr>
+<tr>
+<td>5</td>
+<td>StorageClass</td>
+<td>Stateful workload için PV üretimi</td>
+<td>Test PVC Bound olur</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Ingress controller</td>
+<td>HTTP giriş katmanı hazır olmalı</td>
+<td>Ingress controller pod&#x27;ları Running, test route cevap verir</td>
+</tr>
+<tr>
+<td>7</td>
+<td>cert-manager/MetalLB gerekiyorsa</td>
+<td>TLS ve LoadBalancer davranışı</td>
+<td>Certificate/LoadBalancer kaynakları hazır</td>
+</tr>
+<tr>
+<td>8</td>
+<td>PostgreSQL</td>
+<td>Vessel ve Task DB hazır</td>
+<td>DB pod Running, PVC Bound, connection test başarılı</td>
+</tr>
+<tr>
+<td>9</td>
+<td>RabbitMQ</td>
+<td>Event broker hazır</td>
+<td>Management/AMQP erişimi ve queue declare başarılı</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Redis</td>
+<td>Gateway rate-limit ve telemetry cache hazır</td>
+<td>Redis ping başarılı</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Monitoring Helm</td>
+<td>Metrik/log görünürlüğü</td>
+<td>Grafana/Prometheus açılır, node/pod metrikleri gelir</td>
+</tr>
+<tr>
+<td>12</td>
+<td>HarborSync manifests</td>
+<td>Uygulamalar deploy edilir</td>
+<td>Tüm health endpointleri UP</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Demo flow</td>
+<td>Uçtan uca senaryo çalışır</td>
+<td>Telemetry -&gt; alert -&gt; task -&gt; notification akışı görülür</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Failure test</td>
+<td>HA davranışı anlaşılır</td>
+<td>Pod silme/node drain sonrası servis toparlanır</td>
+</tr>
+</tbody>
+</table>
+<h3 id="18-5-kubernetes-icindeki-stateful-bilesenler">18.5 Kubernetes Içindeki Stateful Bilesenler</h3>
+<p>Bu kararda PostgreSQL, RabbitMQ ve Redis Kubernetes içinde olacağı için önce storage mantığını netleştirmeliyiz.</p>
+<table>
+<thead><tr>
+<th>Bileşen</th>
+<th>Kubernetes tipi</th>
+<th>Demo yaklaşımı</th>
+<th>Dikkat edilecek nokta</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>PostgreSQL</td>
+<td>StatefulSet veya Helm chart</td>
+<td>Tek primary ile başlanabilir</td>
+<td>PVC silinirse veri gider; migration sırası önemli</td>
+</tr>
+<tr>
+<td>RabbitMQ</td>
+<td>Helm chart/operator</td>
+<td>Demo için tek node veya 3 replica</td>
+<td>Queue durability ve disk alanı izlenmeli</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>Helm chart</td>
+<td>Tek node veya sentinel opsiyonel</td>
+<td>Gateway rate-limit Redis&#x27;e bağlı</td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td>Helm chart</td>
+<td>kube-prometheus-stack + opsiyonel Loki</td>
+<td>Disk retention küçük tutulmalı</td>
+</tr>
+</tbody>
+</table>
+<p>Demo olduğu için her stateful bileşeni en baştan production HA ile kurmak zorunda değiliz. Ama şunu bilerek ilerleyeceğiz: PostgreSQL ve RabbitMQ cluster içindeyse worker diskleri ve StorageClass artık uygulamanın güvenilirliğinin parçasıdır.</p>
+<h3 id="18-6-namespace-plani">18.6 Namespace Plani</h3>
+<p>Başlangıçta fazla namespace açmayacağız. Önce sistemi çalıştırıp sonra ayıracağız.</p>
+<table>
+<thead><tr>
+<th>Namespace</th>
+<th>İçerik</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>harborsync</code></td>
+<td>Uygulama servisleri: gateway, vessel, telemetry, congestion, task, notification</td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td>PostgreSQL, Redis, RabbitMQ</td>
+</tr>
+<tr>
+<td><code>monitoring</code></td>
+<td>Prometheus, Grafana, Loki/Promtail</td>
+</tr>
+<tr>
+<td><code>ingress-nginx</code></td>
+<td>Ingress controller</td>
+</tr>
+<tr>
+<td><code>cert-manager</code></td>
+<td>TLS otomasyonu gerekiyorsa</td>
+</tr>
+</tbody>
+</table>
+<p>Bu ayrım hata ayıklamada yardımcı olur. Örneğin uygulama çalışmıyorsa <code>harborsync</code>; database sorunu varsa <code>data</code>; metrik/log sorunu varsa <code>monitoring</code> namespace&#x27;ine bakarız.</p>
+<h3 id="18-7-manifest-ve-helm-yaklasm">18.7 Manifest ve Helm Yaklaşımı</h3>
+<p>HarborSync servisleri için kendi manifestlerimizi yazacağız. PostgreSQL, RabbitMQ, Redis ve monitoring için Helm chart kullanmak daha mantıklı; çünkü bu bileşenlerin StatefulSet, Service, Secret, PVC ve probe ayarları elle yazıldığında hata riski artar.</p>
+<table>
+<thead><tr>
+<th>Bileşen</th>
+<th>Yaklaşım</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>HarborSync uygulama servisleri</td>
+<td>Kendi Deployment/Service/ConfigMap/Secret manifestleri</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>Helm chart veya operator</td>
+</tr>
+<tr>
+<td>RabbitMQ</td>
+<td>Helm chart veya operator</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>Helm chart</td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td>Helm chart, tercihen kube-prometheus-stack</td>
+</tr>
+<tr>
+<td>Loki</td>
+<td>Helm chart, retention düşük</td>
+</tr>
+<tr>
+<td>Ingress</td>
+<td>Helm chart</td>
+</tr>
+</tbody>
+</table>
+<p>Burada seni ezber komutlara boğmayacağız. Her Helm release için önce values dosyasını okuyacağız, sonra sadece gerekli ayarları override edeceğiz. Mantık şu: Chart&#x27;ın varsayılanını anlamadan values yazmak kör deploy yapmaktır.</p>
+<h3 id="18-8-harborsync-deploy-siras">18.8 HarborSync Deploy Sirası</h3>
+<p>Uygulama servislerini de sırayla kuracağız. Çünkü bağımlılık zinciri var.</p>
+<table>
+<thead><tr>
+<th>Sıra</th>
+<th>Servis</th>
+<th>Ön koşul</th>
+<th>Doğrulama</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>PostgreSQL vessel_db/task_db</td>
+<td>StorageClass hazır</td>
+<td>DB connection ve migration</td>
+</tr>
+<tr>
+<td>2</td>
+<td>RabbitMQ</td>
+<td>data namespace hazır</td>
+<td>Exchange/queue oluşumu</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Redis</td>
+<td>data namespace hazır</td>
+<td><code>PING/PONG</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>Vessel Service</td>
+<td>vessel_db + RabbitMQ</td>
+<td><code>/actuator/health</code> UP</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Task Assignment</td>
+<td>task_db + RabbitMQ + Vessel URL</td>
+<td><code>/actuator/health</code> UP</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Telemetry Service</td>
+<td>Redis + RabbitMQ</td>
+<td><code>/health</code> UP</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Congestion Analysis</td>
+<td>RabbitMQ</td>
+<td><code>/actuator/health</code> UP</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Notification Service</td>
+<td>RabbitMQ</td>
+<td><code>/health</code> UP ve RabbitMQ connected</td>
+</tr>
+<tr>
+<td>9</td>
+<td>API Gateway</td>
+<td>Redis + Vessel + Task</td>
+<td><code>/actuator/health</code> UP ve route testi</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Ingress</td>
+<td>Gateway service</td>
+<td>Dışarıdan API erişimi</td>
+</tr>
+</tbody>
+</table>
+<p>Özellikle API Gateway&#x27;i en sona bırakıyoruz. Çünkü Gateway dış kapıdır; arkadaki servisler sağlıklı değilken Gateway test etmek yanıltıcı olur.</p>
+<h3 id="18-9-ilk-basit-basari-kriteri">18.9 Ilk Basit Basari Kriteri</h3>
+<p>Ilk hedefimiz şudur:</p>
+<pre><code>kubectl get nodes
+  -&gt; 3 master + 3 worker Ready
+
+kubectl get pods -A
+  -&gt; system pod&#x27;ları Running
+  -&gt; data namespace pod&#x27;ları Running
+  -&gt; harborsync namespace pod&#x27;ları Running
+
+Demo akışı:
+  1. Vessel oluştur
+  2. Telemetry gönder
+  3. Congestion alert üretildiğini gör
+  4. Task oluştuğunu gör
+  5. Notification log/metrik çıktısını gör</code></pre>
+<p class="figure-caption">Şekil 7: Uygulama fazı için ilk başarı kriteri.</p>
+<p>Bu noktaya gelmeden HPA, TLS, advanced monitoring, backup gibi konulara geçmeyeceğiz. Önce çalışan sade sistemi kuracağız; sonra olgunlaştıracağız.</p>
+<h3 id="18-10-senden-bekledigim-calsma-sekli">18.10 Senden Beklediğim Çalışma Şekli</h3>
+<p>Bu projede senden beklenen şey komut kopyalamak değil, her çıktıdan anlam çıkarmak olacak. Beraber ilerlerken her adımda şu bilgileri not edeceğiz:</p>
+<table>
+<thead><tr>
+<th>Bakılacak şey</th>
+<th>Neden önemli?</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Pod hangi node&#x27;a schedule oldu?</td>
+<td>Anti-affinity ve kaynak dağılımını anlamak için</td>
+</tr>
+<tr>
+<td>Pod neden restart etti?</td>
+<td>Probe, config, secret veya dependency hatasını ayırmak için</td>
+</tr>
+<tr>
+<td>Service endpoint var mı?</td>
+<td>Label selector doğru mu anlamak için</td>
+</tr>
+<tr>
+<td>PVC Bound mu?</td>
+<td>Stateful workload gerçekten storage aldı mı görmek için</td>
+</tr>
+<tr>
+<td>ConfigMap/Secret doğru mu?</td>
+<td>Uygulama environment hatalarını azaltmak için</td>
+</tr>
+<tr>
+<td>Loglarda ilk hata ne?</td>
+<td>Belirti ile kök sebebi ayırmak için</td>
+</tr>
+<tr>
+<td>Health endpoint ne diyor?</td>
+<td>Uygulama gerçekten hazır mı anlamak için</td>
+</tr>
+</tbody>
+</table>
+<p>Bir hata çıktığında ilk refleksimiz tekrar deploy etmek olmayacak. Önce şu sırayla bakacağız:</p>
+<pre><code>1. pod status
+2. pod events
+3. container logs
+4. env/config/secret
+5. service endpoints
+6. dependency health
+7. resource pressure</code></pre>
+<p>Bu alışkanlık seni ezberden çıkarıp gerçek DevOps problem çözme seviyesine taşır.</p>
+<h3 id="18-11-bu-fazda-ertelediklerimiz">18.11 Bu Fazda Ertelediklerimiz</h3>
+<p>Şimdilik bazı konuları bilinçli erteliyoruz. Bu zayıflık değil, doğru sıralama.</p>
+<table>
+<thead><tr>
+<th>Ertelenen konu</th>
+<th>Neden şimdi değil?</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>CI runner</td>
+<td>Mentor kararıyla şimdilik iptal; önce cluster ve deploy öğrenilecek</td>
+</tr>
+<tr>
+<td>Full production DB HA</td>
+<td>Demo veri az; önce StatefulSet/PVC mantığı öğrenilecek</td>
+</tr>
+<tr>
+<td>Uzun log retention</td>
+<td>Disk tüketimini büyütür; demo için kısa retention yeterli</td>
+</tr>
+<tr>
+<td>Service mesh</td>
+<td>Önce temel network/service/ingress öğrenilmeli</td>
+</tr>
+<tr>
+<td>Advanced autoscaling</td>
+<td>Önce sabit replica ile stabil sistem kurulmalı</td>
+</tr>
+<tr>
+<td>Gerçek fiziksel HA</td>
+<td>Tek Proxmox üzerinde Kubernetes HA pratiği yapılacak</td>
+</tr>
+</tbody>
+</table>
+<h3 id="18-12-benim-sana-lead-edecegim-uygulama-sirasi">18.12 Benim Sana Lead Edeceğim Uygulama Sirasi</h3>
+<p>Bundan sonraki pratik çalışma sırası şu olacak:</p>
+<ul>
+<li>VM planını kesinleştiririz: IP, hostname, CPU/RAM/disk.</li>
+<li>Master node&#x27;larda HAProxy/Keepalived tasarımını netleştiririz.</li>
+<li>Kubernetes cluster bootstrap sırasını belirleriz.</li>
+<li>CNI ve StorageClass seçimini yaparız.</li>
+<li>Helm ile ingress, data katmanı ve monitoring&#x27;i kurarız.</li>
+<li>HarborSync için image, manifest, secret ve config dosyalarını hazırlarız.</li>
+<li>Uygulamaları sırayla deploy ederiz.</li>
+<li>Demo akışını çalıştırırız.</li>
+<li>Pod silme, node drain, service failover testleri yaparız.</li>
+<li>En son rapordaki tasarım ile gerçek gözlemleri karşılaştırırız.</li>
+</ul>
+<p>Bu sırada her adımda senden sadece komut çalıştırmanı değil, çıktıyı yorumlamanı isteyeceğim. Örneğin <code>kubectl get pods</code> çıktısını gördüğümüzde soru şu olacak: &quot;Hangi pod hazır değil, neden hazır değil, hangi dependency eksik olabilir?&quot; Bu şekilde ilerlersek proje sonunda sadece çalışan bir cluster değil, gerçekten anladığın bir Kubernetes pratiği çıkmış olur.</p>
+</body>
+</html>

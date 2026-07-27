@@ -323,6 +323,157 @@ The Docker workflow builds all services from source:
 If dependency downloads fail during Docker build, check network access to Maven
 Central, the Go module proxy, and PyPI.
 
+## Kubernetes Deployment (Bare-Metal HA)
+
+Besides Docker Compose, HarborSync ships a full Kubernetes deployment used to run
+the platform on a self-hosted **3 control-plane + 3 worker** cluster fronted by a
+Keepalived VIP and HAProxy. All manifests are under [`k8s/`](k8s/) and the
+cluster-level bootstrap material under [`infra/`](infra/).
+
+> **Placeholders:** Every IP, hostname, VRRP password and network interface in
+> `infra/` is a sanitized example. Replace them with your own values before use:
+> IPs use `192.168.10.0/24` (`.150` = API VIP, `.151` = ingress VIP), the VRRP
+> secret is `CHANGE_ME_VRRP_PASS`, and the NIC is `ens18`.
+
+### Layout
+
+```
+infra/
+├── haproxy/haproxy.cfg          # LB for the API (:8443) and ingress (:80/:443)
+├── keepalived/master{1,2,3}.conf# VIPs: API + ingress
+├── kubeadm/kubeadm-init.example.yaml
+└── calico/                      # CNI (Calico v3.32.0, Tigera Operator)
+k8s/
+├── platform/gateway/            # Gateway API + Envoy Gateway (Calico-managed)
+└── apps/harborsync/             # Namespace, secrets, infra + microservices
+```
+
+### Prerequisites
+
+- 6 Linux nodes (3 control-plane, 3 worker) with `containerd`, `kubeadm`,
+  `kubelet`, `kubectl` (v1.36.x) installed and swap handled per your config.
+- Two external load balancers (or one HA pair) running **HAProxy + Keepalived**
+  from [`infra/`](infra/) — see [`docs/kubernetes-ha-gateway.md`](docs/kubernetes-ha-gateway.md).
+- Service images available to the cluster (see step 4). The manifests reference
+  `harborsync/<service>:local` with `imagePullPolicy: IfNotPresent`.
+
+### 1. Load balancer + VIPs
+
+Deploy `infra/haproxy/haproxy.cfg` and the matching `infra/keepalived/masterN.conf`
+onto your LB nodes (adjust IPs/NIC/VRRP password first). This gives you:
+
+- API VIP `:8443` → control-plane `:6443` (used as `controlPlaneEndpoint`)
+- Ingress VIP `:80/:443` → worker NodePorts `30080/30443`
+
+### 2. Bootstrap the control plane
+
+```bash
+# On the first control-plane node (adjust IPs/hostnames in the file first):
+sudo kubeadm init --config infra/kubeadm/kubeadm-init.example.yaml --upload-certs
+```
+
+Join the other two control-plane nodes and the three workers using the
+`kubeadm join ...` commands printed by `init`. Configure `kubectl`:
+
+```bash
+mkdir -p ~/.kube && sudo cp /etc/kubernetes/admin.conf ~/.kube/config
+sudo chown "$(id -u):$(id -g)" ~/.kube/config
+```
+
+### 3. Install the CNI (Calico)
+
+```bash
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.0/manifests/tigera-operator.yaml
+kubectl create -f infra/calico/installation.yaml
+kubectl create -f infra/calico/apiserver.yaml
+kubectl get tigerastatus        # wait until everything is Available
+kubectl get nodes -o wide       # all nodes should become Ready
+```
+
+The pod CIDR in `infra/calico/installation.yaml` (`172.30.0.0/16`) **must match**
+`networking.podSubnet` in the kubeadm config. See [`infra/calico/README.md`](infra/calico/README.md).
+
+### 4. Make service images available
+
+The manifests use locally-tagged images. Build them from source and make them
+resolvable on every worker, either by pushing to a registry (and updating the
+`image:` fields) or by importing them into each node's `containerd`:
+
+```bash
+# Example: build and import one service on each worker
+docker build -t harborsync/vessel-service:local ./vessel-service
+docker save harborsync/vessel-service:local | \
+  sudo ctr -n k8s.io images import -
+```
+
+Repeat for `gateway`, `telemetry-service`, `congestion-analysis`,
+`task-assignment-service`, and `notification-service`.
+
+### 5. Label the ingress nodes
+
+The Envoy gateway pods are pinned to nodes labelled for ingress (and spread with
+anti-affinity). Label at least as many workers as gateway replicas (3):
+
+```bash
+kubectl label nodes <worker1> <worker2> <worker3> harborsync.io/ingress-gateway=true
+```
+
+### 6. Gateway API + Envoy Gateway
+
+Gateway API is provided by the Calico operator (no upstream CRD install needed).
+Apply the platform manifests in order:
+
+```bash
+kubectl apply -f k8s/platform/gateway/00-gateway-api-enable.yaml   # GatewayAPI operator CR
+kubectl apply -f k8s/platform/gateway/10-envoy-proxy.yaml          # namespace + EnvoyProxy (NodePort 30080/30443)
+kubectl apply -f k8s/platform/gateway/20-public-gateway.yaml       # Gateway (needs TLS secret from step 7)
+# 30/40-demo-web* are optional connectivity checks
+```
+
+### 7. Create the TLS secret
+
+The `https` listener terminates TLS with `app-harborsync-lab-tls` in the
+`harborsync-gateway` namespace. Generate a self-signed cert (see
+[`docs/kubernetes-ha-gateway.md`](docs/kubernetes-ha-gateway.md) for a CA-signed flow):
+
+```bash
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout tls.key -out tls.crt -subj "/CN=app.harborsync.lab" \
+  -addext "subjectAltName=DNS:app.harborsync.lab"
+
+kubectl create secret tls app-harborsync-lab-tls \
+  --cert=tls.crt --key=tls.key -n harborsync-gateway
+```
+
+### 8. Deploy the application
+
+```bash
+kubectl apply -f k8s/apps/harborsync/
+```
+
+This creates the `harborsync` namespace, the `harborsync-runtime` secret,
+ephemeral PostgreSQL/RabbitMQ/Redis, all six services, and the public
+`HTTPRoute`. The demo credentials in `00-namespace-secrets.yaml`
+(`harbor/harbor123`, `harborsync/harborsync123`, demo JWT secret) are for lab use
+— replace them for anything beyond the course scope.
+
+### 9. Access and verify
+
+Point `app.harborsync.lab` at the ingress VIP, then call the API:
+
+```bash
+echo "192.168.10.151 app.harborsync.lab" | sudo tee -a /etc/hosts
+
+curl -k https://app.harborsync.lab/actuator/health
+curl -k https://app.harborsync.lab/api/tasks/pending -H "Authorization: Bearer <demo-jwt>"
+
+kubectl -n harborsync get pods
+kubectl -n harborsync-gateway get pods,svc
+```
+
+Routing (see [`k8s/apps/harborsync/30-public-route.yaml`](k8s/apps/harborsync/30-public-route.yaml)):
+`/api` and `/actuator` → API Gateway (`:8080`), `/telemetry` → Telemetry Service (`:8082`).
+
 ## Team Responsibilities
 
 | Owner | Scope |

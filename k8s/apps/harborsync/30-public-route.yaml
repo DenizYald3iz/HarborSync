@@ -1,0 +1,40 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: harborsync-app
+  namespace: harborsync
+  labels:
+    app.kubernetes.io/name: harborsync-app
+    app.kubernetes.io/part-of: harborsync
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: harborsync-public
+      namespace: harborsync-gateway
+      sectionName: http
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: harborsync-public
+      namespace: harborsync-gateway
+      sectionName: https
+  hostnames:
+    - app.harborsync.lab
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+        - path:
+            type: PathPrefix
+            value: /actuator
+      backendRefs:
+        - name: gateway
+          port: 8080
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /telemetry
+      backendRefs:
+        - name: telemetry-service
+          port: 8082
